@@ -1,0 +1,23 @@
+appId: com.luqman.aiusagedock
+productName: AiUsageDock
+directories:
+  output: dist
+  buildResources: assets
+# Files bundled into the app.asar. The portable runtime is self-contained;
+# user settings are written next to the .exe (see src/main.js getDataDir()).
+files:
+  - src/**/*
+  - assets/**/*
+  - package.json
+asarUnpack:
+  - assets/**/*
+win:
+  target:
+    - target: portable
+      arch: [x64]
+  icon: assets/icon.ico
+portable:
+  artifactName: AiUsageDock-portable.exe
+# NSIS block kept for reference; portable target does not run the installer.
+nsis:
+  oneClick: false

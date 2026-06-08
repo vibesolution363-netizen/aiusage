@@ -1,0 +1,19 @@
+{
+  "name": "ai-usage-dock",
+  "version": "1.0.0",
+  "description": "AI Usage Monitor Dock - Portable Windows App",
+  "main": "src/main.js",
+  "author": "Luqman",
+  "license": "MIT",
+  "scripts": {
+    "make-icon": "node scripts/make-icon.js",
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "npm run make-icon && electron-builder --win portable",
+    "build:dir": "npm run make-icon && electron-builder --win dir"
+  },
+  "devDependencies": {
+    "electron": "^31.7.0",
+    "electron-builder": "^24.13.3"
+  }
+}

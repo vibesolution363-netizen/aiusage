@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:;" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Usage Dock</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <div class="dock" id="dock">
+        <!-- Header / drag handle -->
+        <header class="titlebar" id="titlebar">
+          <div class="brand">
+            <span class="brand-icon">⚡</span>
+            <span class="brand-name">AI USAGE</span>
+          </div>
+          <div class="title-actions">
+            <span class="clock" id="clock">--:--</span>
+            <button class="icon-btn no-drag" id="settingsBtn" title="Settings">⚙</button>
+            <button class="icon-btn no-drag" id="refreshBtn" title="Refresh">↻</button>
+            <button class="icon-btn no-drag" id="collapseBtn" title="Collapse / expand">▾</button>
+            <button class="icon-btn no-drag close" id="closeBtn" title="Hide to tray">×</button>
+          </div>
+        </header>
+
+        <!-- Collapsible body -->
+        <div class="body" id="body">
+          <!-- Tabs -->
+          <nav class="tabs" id="tabs">
+            <button class="tab" data-tab="claude">Claude</button>
+            <button class="tab" data-tab="openai">OpenAI</button>
+            <button class="tab" data-tab="copilot">Copilot</button>
+            <button class="tab" data-tab="all">All</button>
+          </nav>
+
+          <!-- Status line -->
+          <div class="status">
+            <span id="updated">—</span>
+            <span id="source" class="source"></span>
+          </div>
+
+          <!-- Active panel injected here -->
+          <main class="panel-container" id="panel"></main>
+        </div>
+
+        <!-- Settings overlay -->
+        <div class="overlay" id="overlay" hidden>
+          <div class="sheet">
+            <div class="sheet-head">
+              <b>Settings</b>
+              <button class="icon-btn no-drag" id="overlayClose" title="Close">×</button>
+            </div>
+            <div class="sheet-body">
+              <div class="set-section">Claude data source</div>
+              <label class="set-toggle">
+                <input type="checkbox" id="setLive" />
+                <span>Use live claude.ai data (Option 1)</span>
+              </label>
+              <div class="set-actions">
+                <button class="cta" id="btnLogin">Log in to Claude</button>
+                <span class="login-status" id="loginStatus">checking…</span>
+              </div>
+              <div class="set-links">
+                <a class="cta-link" id="btnOpenClaude">Open claude.ai → Settings → Usage ↗</a>
+                <a class="cta-link" id="btnLogout">Log out of claude.ai</a>
+              </div>
+
+              <div class="set-section">Manual entry (Option 2 · always accurate)</div>
+              <label class="set-toggle">
+                <input type="checkbox" id="setManual" />
+                <span>Use manual values</span>
+              </label>
+              <label class="set-field">
+                <span>Session used %</span>
+                <input type="number" id="setSession" min="0" max="100" step="1" placeholder="e.g. 70" />
+              </label>
+              <label class="set-field">
+                <span>Weekly used %</span>
+                <input type="number" id="setWeekly" min="0" max="100" step="1" placeholder="e.g. 45" />
+              </label>
+              <label class="set-field">
+                <span>Plan</span>
+                <input type="text" id="setPlan" placeholder="Max" />
+              </label>
+              <p class="set-hint">
+                Enter the “% used” shown on claude.ai. The dock displays the
+                remaining amount (e.g. 70% used → “30% left”).
+              </p>
+            </div>
+            <div class="sheet-foot">
+              <button class="cta primary" id="btnSaveSettings">Save</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Transparency control (always visible) -->
+        <footer class="transparency">
+          <span class="t-label">Transparency</span>
+          <input type="range" id="opacity" min="20" max="100" step="1" value="92" />
+          <span class="t-value" id="opacityValue">92%</span>
+        </footer>
+      </div>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

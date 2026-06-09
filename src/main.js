@@ -16,9 +16,11 @@ const WIN_WIDTH = 260;
 const WIN_HEIGHT = 480;
 const COLLAPSED_HEIGHT = 116;
 const SCREEN_MARGIN = 16;
+// Width of the grab tab left peeking on screen when the dock is slid to the edge.
+const HANDLE_W = 22;
 
 const DEFAULT_SETTINGS = {
-  window: { x: null, y: null, opacity: 0.92 },
+  window: { x: null, y: null, opacity: 0.92, peeked: false },
   currency: { code: 'MYR', rate: 4.71 },
   refreshInterval: 300000,
   activeTab: 'claude',
@@ -58,6 +60,8 @@ let settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
 let dragTimer = null;
 let dragOffset = { x: 0, y: 0 };
 let saveTimer = null;
+let slideTimer = null;
+let peeked = false;
 
 // ---------- Paths ----------
 // Portable apps keep their settings next to the .exe so "copy folder + run"
@@ -182,7 +186,19 @@ function createWindow() {
   win.setOpacity(clampOpacity(settings.window.opacity));
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => {
+    win.show();
+    // Restore the "slid to edge" state from the previous session, if any.
+    if (settings.window && settings.window.peeked) applyPeek(true, false);
+  });
+
+  // Slide out of the way automatically when the dock loses focus
+  // (the user clicked another app, a browser, or the desktop).
+  win.on('blur', () => {
+    if (!win || !win.isVisible() || peeked || app.isQuitting) return;
+    applyPeek(true, true);
+    win.webContents.send('peek-changed', true);
+  });
 
   // Open external links in the default browser, never inside the dock.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -203,6 +219,51 @@ function clampOpacity(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 0.92;
   return Math.max(0.2, Math.min(1, n));
+}
+
+// ---------- Edge slide (peek) ----------
+// Work area of whichever display the window currently sits on.
+function workAreaForWin() {
+  const [x, y] = win.getPosition();
+  const [w, h] = win.getSize();
+  const d = screen.getDisplayNearestPoint({ x: x + Math.round(w / 2), y: y + Math.round(h / 2) });
+  return d.workArea;
+}
+
+// Animate only the window's X so it slides horizontally (Y stays put).
+function animateX(targetX) {
+  if (slideTimer) clearInterval(slideTimer);
+  const startX = win.getPosition()[0];
+  const startT = Date.now();
+  const dur = 200;
+  slideTimer = setInterval(() => {
+    if (!win) {
+      clearInterval(slideTimer);
+      slideTimer = null;
+      return;
+    }
+    const t = Math.min(1, (Date.now() - startT) / dur);
+    const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // easeInOutQuad
+    const y = win.getPosition()[1];
+    win.setPosition(Math.round(startX + (targetX - startX) * ease), y);
+    if (t >= 1) {
+      clearInterval(slideTimer);
+      slideTimer = null;
+    }
+  }, 8);
+}
+
+// Slide the dock off the right edge (only the grab tab remains) or back in.
+function applyPeek(wantPeek, animate = true) {
+  if (!win) return;
+  peeked = !!wantPeek;
+  const wa = workAreaForWin();
+  const waRight = wa.x + wa.width;
+  const targetX = peeked ? waRight - HANDLE_W : waRight - WIN_WIDTH;
+  if (animate) animateX(targetX);
+  else win.setPosition(targetX, win.getPosition()[1]);
+  settings.window.peeked = peeked;
+  scheduleSave();
 }
 
 // ---------- System tray ----------
@@ -459,6 +520,17 @@ ipcMain.handle('gemini-status', async () => {
 });
 
 // ---- ChatGPT (OpenAI) live session ----
+// Open a sign-in window and capture cookies automatically.
+ipcMain.handle('openai-login', async (_e, remember) => {
+  if (remember != null) {
+    settings.openai.rememberMe = remember !== false;
+    syncRemember();
+    scheduleSave();
+  }
+  const authed = await openaiLive.openLogin();
+  return { authed };
+});
+
 // Reuse an already-logged-in browser by importing its session-token cookie.
 ipcMain.handle('openai-import-session', async (_e, key, remember) => {
   if (remember != null) {
@@ -492,6 +564,8 @@ ipcMain.handle('resize-window', (_e, height) => {
   win.setBounds({ x, y, width: WIN_WIDTH, height: h });
   return true;
 });
+
+ipcMain.on('set-peek', (_e, wantPeek) => applyPeek(wantPeek, true));
 
 ipcMain.on('drag-start', (_e, offset) => {
   dragOffset = offset && Number.isFinite(offset.x) ? offset : { x: 0, y: 0 };
@@ -562,7 +636,7 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     app.isQuitting = true;
-    if (win && !win.isDestroyed()) {
+    if (win && !win.isDestroyed() && !peeked) {
       const [x, y] = win.getPosition();
       settings.window.x = x;
       settings.window.y = y;

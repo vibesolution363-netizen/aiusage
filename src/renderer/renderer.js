@@ -24,6 +24,7 @@ const state = {
   activeTab: 'claude',
   enabledServices: ['claude'], // tabs the user has chosen to show
   collapsed: false,
+  peeked: false,
   loading: false,
 };
 
@@ -35,6 +36,8 @@ const el = {
   settingsBtn: document.getElementById('settingsBtn'),
   refreshBtn: document.getElementById('refreshBtn'),
   collapseBtn: document.getElementById('collapseBtn'),
+  slideBtn: document.getElementById('slideBtn'),
+  peekHandle: document.getElementById('peekHandle'),
   closeBtn: document.getElementById('closeBtn'),
   tabs: document.getElementById('tabs'),
   tabList: document.getElementById('tabList'),
@@ -49,6 +52,8 @@ const el = {
   // overlay — Claude session
   overlay: document.getElementById('overlay'),
   overlayClose: document.getElementById('overlayClose'),
+  btnClaudeLogin: document.getElementById('btnClaudeLogin'),
+  claudeLoginStatus: document.getElementById('claudeLoginStatus'),
   setRemember: document.getElementById('setRemember'),
   setSessionKey: document.getElementById('setSessionKey'),
   btnImportSession: document.getElementById('btnImportSession'),
@@ -58,6 +63,8 @@ const el = {
   btnSaveSettings: document.getElementById('btnSaveSettings'),
 
   // overlay — Gemini session
+  btnGeminiLogin: document.getElementById('btnGeminiLogin'),
+  geminiLoginStatus: document.getElementById('geminiLoginStatus'),
   setGeminiRemember: document.getElementById('setGeminiRemember'),
   setGeminiSessionKey: document.getElementById('setGeminiSessionKey'),
   btnGeminiImportSession: document.getElementById('btnGeminiImportSession'),
@@ -66,6 +73,8 @@ const el = {
   btnGeminiLogout: document.getElementById('btnGeminiLogout'),
 
   // overlay — ChatGPT session
+  btnOpenaiLogin: document.getElementById('btnOpenaiLogin'),
+  openaiLoginStatus: document.getElementById('openaiLoginStatus'),
   setOpenaiRemember: document.getElementById('setOpenaiRemember'),
   setOpenaiSessionKey: document.getElementById('setOpenaiSessionKey'),
   btnOpenaiImportSession: document.getElementById('btnOpenaiImportSession'),
@@ -385,6 +394,32 @@ function setCollapsed(collapsed) {
   api.resizeWindow(collapsed ? COLLAPSED_HEIGHT : FULL_HEIGHT);
 }
 
+// ---------- Slide to edge (peek) ----------
+// When peeked, the dock slides off the right edge and only a small tab remains.
+let peekTimer = null;
+
+// Toggle the visual "peeked" state (tab shown, chrome stripped). When the dock
+// is sliding out we defer adding the class until the slide finishes, so the
+// panel keeps its background during the ~200ms animation.
+function applyPeekClass(peeked, animated) {
+  state.peeked = peeked;
+  if (peekTimer) {
+    clearTimeout(peekTimer);
+    peekTimer = null;
+  }
+  if (peeked) {
+    peekTimer = setTimeout(() => el.dock.classList.add('peeked'), animated ? 210 : 0);
+  } else {
+    el.dock.classList.remove('peeked');
+  }
+}
+
+// User-initiated slide (button / tab): drive the window in main, then animate.
+function setPeeked(peeked) {
+  api.setPeek(peeked);
+  applyPeekClass(peeked, true);
+}
+
 // ---------- Opacity ----------
 function applyOpacity(value, persist) {
   const pct = Math.max(20, Math.min(100, Math.round(value)));
@@ -428,6 +463,10 @@ function openSettings() {
   el.setOpenaiRemember.checked = openaiCfg().rememberMe !== false;
   el.setOpenaiSessionKey.value = '';
 
+  el.claudeLoginStatus.textContent = '';
+  el.geminiLoginStatus.textContent = '';
+  el.openaiLoginStatus.textContent = '';
+
   el.overlay.hidden = false;
   showStatus(el.importStatus, api.claudeStatus);
   showStatus(el.geminiImportStatus, api.geminiStatus);
@@ -458,6 +497,25 @@ async function importSession({ btn, input, status, remember, apiImport }) {
     }
   } finally {
     btn.textContent = 'Use this session';
+    btn.disabled = false;
+  }
+}
+
+// Open a sign-in window and capture the session automatically. Shared by all
+// three services.
+async function loginCapture({ btn, status, remember, apiLogin }) {
+  const label = btn.textContent;
+  btn.textContent = 'Opening…';
+  btn.disabled = true;
+  status.textContent = 'waiting for sign-in…';
+  status.className = 'login-status';
+  try {
+    const { authed } = await apiLogin(remember.checked);
+    status.textContent = authed ? 'Connected ✓' : 'Not connected';
+    status.className = `login-status ${authed ? 'ok' : 'no'}`;
+    if (authed) await refresh();
+  } finally {
+    btn.textContent = label;
     btn.disabled = false;
   }
 }
@@ -526,6 +584,8 @@ function bindEvents() {
 
   el.refreshBtn.addEventListener('click', refresh);
   el.collapseBtn.addEventListener('click', () => setCollapsed(!state.collapsed));
+  el.slideBtn.addEventListener('click', () => setPeeked(true));
+  el.peekHandle.addEventListener('click', () => setPeeked(false));
   el.closeBtn.addEventListener('click', () => api.hideApp());
   el.settingsBtn.addEventListener('click', openSettings);
 
@@ -536,6 +596,14 @@ function bindEvents() {
   el.btnSaveSettings.addEventListener('click', saveSettingsForm);
 
   // Claude session
+  el.btnClaudeLogin.addEventListener('click', () =>
+    loginCapture({
+      btn: el.btnClaudeLogin,
+      status: el.claudeLoginStatus,
+      remember: el.setRemember,
+      apiLogin: api.claudeLogin,
+    })
+  );
   el.btnOpenClaude.addEventListener('click', () => api.openExternal(CLAUDE_USAGE_URL));
   el.btnImportSession.addEventListener('click', () =>
     importSession({
@@ -553,6 +621,14 @@ function bindEvents() {
   });
 
   // Gemini session
+  el.btnGeminiLogin.addEventListener('click', () =>
+    loginCapture({
+      btn: el.btnGeminiLogin,
+      status: el.geminiLoginStatus,
+      remember: el.setGeminiRemember,
+      apiLogin: api.geminiLogin,
+    })
+  );
   el.btnOpenGemini.addEventListener('click', () => api.openExternal(GEMINI_USAGE_URL));
   el.btnGeminiImportSession.addEventListener('click', () =>
     importSession({
@@ -570,6 +646,14 @@ function bindEvents() {
   });
 
   // ChatGPT session
+  el.btnOpenaiLogin.addEventListener('click', () =>
+    loginCapture({
+      btn: el.btnOpenaiLogin,
+      status: el.openaiLoginStatus,
+      remember: el.setOpenaiRemember,
+      apiLogin: api.openaiLogin,
+    })
+  );
   el.btnOpenChatgpt.addEventListener('click', () => api.openExternal(OPENAI_USAGE_URL));
   el.btnOpenaiImportSession.addEventListener('click', () =>
     importSession({
@@ -587,6 +671,9 @@ function bindEvents() {
   });
 
   api.onTrayRefresh(() => refresh());
+
+  // Main auto-slides the dock away when it loses focus.
+  api.onPeekChanged((peeked) => applyPeekClass(peeked, true));
 }
 
 // ---------- Init ----------
@@ -595,6 +682,9 @@ async function init() {
 
   const op = (state.settings.window && state.settings.window.opacity) || 0.92;
   applyOpacity(op * 100, false);
+
+  // Restore the slid-to-edge state (main positioned the window already).
+  if (state.settings.window && state.settings.window.peeked) applyPeekClass(true, false);
 
   bindEvents();
   tickClock();

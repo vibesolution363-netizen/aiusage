@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Window
   setOpacity: (value) => ipcRenderer.invoke('set-opacity', value),
   resizeWindow: (height) => ipcRenderer.invoke('resize-window', height),
+  setPeek: (peek) => ipcRenderer.send('set-peek', peek),
   startDrag: (offset) => ipcRenderer.send('drag-start', offset),
   endDrag: () => ipcRenderer.send('drag-end'),
   closeApp: () => ipcRenderer.send('close-app'),
@@ -20,16 +21,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fetchUsage: (service) => ipcRenderer.invoke('fetch-usage', service),
 
   // Claude live session
+  claudeLogin: (remember) => ipcRenderer.invoke('claude-login', remember),
   claudeImportSession: (key, remember) => ipcRenderer.invoke('claude-import-session', key, remember),
   claudeLogout: () => ipcRenderer.invoke('claude-logout'),
   claudeStatus: () => ipcRenderer.invoke('claude-status'),
 
   // Gemini live session
+  geminiLogin: (remember) => ipcRenderer.invoke('gemini-login', remember),
   geminiImportSession: (key, remember) => ipcRenderer.invoke('gemini-import-session', key, remember),
   geminiLogout: () => ipcRenderer.invoke('gemini-logout'),
   geminiStatus: () => ipcRenderer.invoke('gemini-status'),
 
   // ChatGPT (OpenAI) live session
+  openaiLogin: (remember) => ipcRenderer.invoke('openai-login', remember),
   openaiImportSession: (key, remember) => ipcRenderer.invoke('openai-import-session', key, remember),
   openaiLogout: () => ipcRenderer.invoke('openai-logout'),
   openaiStatus: () => ipcRenderer.invoke('openai-status'),
@@ -40,4 +44,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Events from main / tray
   onTrayRefresh: (cb) => ipcRenderer.on('tray-refresh', () => cb()),
+  onPeekChanged: (cb) => ipcRenderer.on('peek-changed', (_e, peeked) => cb(peeked)),
 });

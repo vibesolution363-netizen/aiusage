@@ -89,8 +89,30 @@ function openLogin() {
       action: 'allow',
       overrideBrowserWindowOptions: { webPreferences: { partition: part } },
     }));
+    let settled = false;
+    const settle = (authed) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(timer);
+      resolve(authed);
+    };
+    // Poll while the window is open; the moment the session cookie appears we
+    // auto-close the window and report success (no manual close needed).
+    const timer = setInterval(async () => {
+      if (win.isDestroyed()) return;
+      let authed = false;
+      try {
+        authed = await isAuthed();
+      } catch {
+        /* ignore */
+      }
+      if (authed) {
+        settle(true);
+        if (!win.isDestroyed()) win.close();
+      }
+    }, 1200);
     win.loadURL(`${BASE}/login`);
-    win.on('closed', async () => resolve(await isAuthed()));
+    win.on('closed', async () => settle(await isAuthed()));
   });
 }
 

@@ -43,11 +43,14 @@ function ses() {
   return session.fromPartition(partitionName());
 }
 
-// Logged in if chatgpt.com has a non-empty next-auth session cookie.
+// Logged in if chatgpt.com has a non-empty next-auth session cookie. next-auth
+// often chunks a long JWT token into ".0"/".1" and the prefix varies, so match
+// any "next-auth.session-token" cookie. Query the whole partition jar (no url
+// filter) to avoid domain/path filtering surprises.
 async function isAuthed() {
   try {
-    const cookies = await ses().cookies.get({ url: BASE });
-    return cookies.some((c) => c.name === SESSION_COOKIE && !!c.value);
+    const cookies = await ses().cookies.get({});
+    return cookies.some((c) => /next-auth\.session-token/i.test(c.name) && !!c.value);
   } catch {
     return false;
   }
@@ -71,8 +74,30 @@ function openLogin() {
       action: 'allow',
       overrideBrowserWindowOptions: { webPreferences: { partition: part } },
     }));
+    let settled = false;
+    const settle = (authed) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(timer);
+      resolve(authed);
+    };
+    // Poll while the window is open; the moment the session cookie appears we
+    // auto-close the window and report success (no manual close needed).
+    const timer = setInterval(async () => {
+      if (win.isDestroyed()) return;
+      let authed = false;
+      try {
+        authed = await isAuthed();
+      } catch {
+        /* ignore */
+      }
+      if (authed) {
+        settle(true);
+        if (!win.isDestroyed()) win.close();
+      }
+    }, 1200);
     win.loadURL(`${BASE}/`);
-    win.on('closed', async () => resolve(await isAuthed()));
+    win.on('closed', async () => settle(await isAuthed()));
   });
 }
 

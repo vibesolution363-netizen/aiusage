@@ -14,7 +14,7 @@ const u = require('./util');
  *
  * The cost + sparkline are estimated, clearly secondary.
  */
-function build({ live, rate } = {}) {
+function build({ live, rate, prices } = {}) {
   live = live || { authed: false };
   rate = rate || 4.71;
 
@@ -33,9 +33,6 @@ function build({ live, rate } = {}) {
   const needsSetup = !authed;
   const infoMsg = authed ? 'Connected ✓ — ChatGPT does not publish usage %' : '';
 
-  const today = u.round(0.4 + rng() * 3.2, 2);
-  const month = u.round(today * (10 + rng() * 18), 2);
-
   return {
     service: 'openai',
     name: 'ChatGPT',
@@ -53,13 +50,7 @@ function build({ live, rate } = {}) {
 
     session: null,
     weekly: null,
-    cost: {
-      today,
-      month,
-      myr: u.round(month * rate, 2),
-      todayMyr: u.round(today * rate, 2),
-      estimated: true,
-    },
+    cost: u.planCost('openai', plan, rate, prices),
 
     metrics: [],
     sparkline: u.makeSparkline(rng, 16, 0.35, 0.2),

@@ -61,92 +61,89 @@
               <button class="icon-btn no-drag" id="overlayClose" title="Close">×</button>
             </div>
             <div class="sheet-body">
-              <div class="set-section">Claude session</div>
-              <div class="set-actions">
-                <button class="cta primary" id="btnClaudeLogin">Sign in &amp; capture</button>
-                <span class="login-status" id="claudeLoginStatus"></span>
-              </div>
-              <p class="set-hint">
-                Opens claude.ai in a window — sign in once and the session is
-                captured automatically. Or paste the <code>sessionKey</code> cookie
-                manually below.
-              </p>
-              <label class="set-field">
-                <span>sessionKey</span>
-                <input type="password" id="setSessionKey" placeholder="sk-ant-sid01-…" autocomplete="off" />
-              </label>
-              <div class="set-actions">
-                <button class="cta" id="btnImportSession">Use this session</button>
-                <span class="login-status" id="importStatus"></span>
-              </div>
-              <label class="set-toggle">
-                <input type="checkbox" id="setRemember" checked />
-                <span>Remember me (keep session after restart)</span>
-              </label>
-              <div class="set-links">
-                <a class="cta-link" id="btnOpenClaude">Open claude.ai → Settings → Usage ↗</a>
-                <a class="cta-link" id="btnLogout">Clear claude.ai session</a>
-              </div>
+              <!-- Claude -->
+              <section class="set-card">
+                <header class="set-card-head">
+                  <span class="set-logo claude">C</span>
+                  <span class="set-card-title">Claude</span>
+                  <span class="login-status" id="importStatus"></span>
+                </header>
+                <div class="set-signin">
+                  <button class="cta primary" id="btnClaudeLogin">Sign in &amp; capture</button>
+                  <span class="login-status" id="claudeLoginStatus"></span>
+                </div>
+                <label class="set-toggle">
+                  <input type="checkbox" id="setRemember" checked />
+                  <span>Keep me signed in after restart</span>
+                </label>
+                <details class="set-adv">
+                  <summary>Paste cookie manually</summary>
+                  <p class="set-hint">Paste the <code>sessionKey</code> cookie from claude.ai.</p>
+                  <input type="password" id="setSessionKey" placeholder="sk-ant-sid01-…" autocomplete="off" />
+                  <button class="cta ghost" id="btnImportSession">Use this session</button>
+                </details>
+                <div class="set-links">
+                  <a class="cta-link" id="btnOpenClaude">Open usage ↗</a>
+                  <a class="cta-link" id="btnLogout">Clear session</a>
+                </div>
+              </section>
 
-              <div class="set-divider"></div>
+              <!-- Gemini -->
+              <section class="set-card">
+                <header class="set-card-head">
+                  <span class="set-logo gemini">G</span>
+                  <span class="set-card-title">Gemini</span>
+                  <span class="login-status" id="geminiImportStatus"></span>
+                </header>
+                <div class="set-signin">
+                  <button class="cta primary" id="btnGeminiLogin">Sign in &amp; capture</button>
+                  <span class="login-status" id="geminiLoginStatus"></span>
+                </div>
+                <label class="set-toggle">
+                  <input type="checkbox" id="setGeminiRemember" checked />
+                  <span>Keep me signed in after restart</span>
+                </label>
+                <details class="set-adv">
+                  <summary>Paste cookie manually</summary>
+                  <p class="set-hint">Paste your gemini.google.com <code>Cookie:</code> header.</p>
+                  <input type="password" id="setGeminiSessionKey" placeholder="__Secure-1PSID=…; __Secure-1PSIDTS=…" autocomplete="off" />
+                  <button class="cta ghost" id="btnGeminiImportSession">Use this session</button>
+                </details>
+                <div class="set-links">
+                  <a class="cta-link" id="btnOpenGemini">Open Gemini ↗</a>
+                  <a class="cta-link" id="btnGeminiLogout">Clear session</a>
+                </div>
+              </section>
 
-              <div class="set-section">Gemini session</div>
-              <div class="set-actions">
-                <button class="cta primary" id="btnGeminiLogin">Sign in &amp; capture</button>
-                <span class="login-status" id="geminiLoginStatus"></span>
-              </div>
-              <p class="set-hint">
-                Opens Google sign-in in a window — sign in once and the session is
-                captured automatically. Or paste your gemini.google.com
-                <code>Cookie:</code> header manually below.
-              </p>
-              <label class="set-field">
-                <span>Cookies</span>
-                <input type="password" id="setGeminiSessionKey" placeholder="__Secure-1PSID=…; __Secure-1PSIDTS=…; …" autocomplete="off" />
-              </label>
-              <div class="set-actions">
-                <button class="cta" id="btnGeminiImportSession">Use this session</button>
-                <span class="login-status" id="geminiImportStatus"></span>
-              </div>
-              <label class="set-toggle">
-                <input type="checkbox" id="setGeminiRemember" checked />
-                <span>Remember me (keep session after restart)</span>
-              </label>
-              <div class="set-links">
-                <a class="cta-link" id="btnOpenGemini">Open gemini.google.com ↗</a>
-                <a class="cta-link" id="btnGeminiLogout">Clear Google session</a>
-              </div>
-
-              <div class="set-divider"></div>
-
-              <div class="set-section">ChatGPT session</div>
-              <div class="set-actions">
-                <button class="cta primary" id="btnOpenaiLogin">Sign in &amp; capture</button>
-                <span class="login-status" id="openaiLoginStatus"></span>
-              </div>
-              <p class="set-hint">
-                Opens chatgpt.com in a window — sign in once and the session is
-                captured automatically. Or paste the
-                <code>__Secure-next-auth.session-token</code> cookie manually below.
-                Note: ChatGPT does not publish usage %, so only your plan +
-                connection are shown.
-              </p>
-              <label class="set-field">
-                <span>Session token</span>
-                <input type="password" id="setOpenaiSessionKey" placeholder="eyJhbGci… or __Secure-next-auth.session-token=…" autocomplete="off" />
-              </label>
-              <div class="set-actions">
-                <button class="cta" id="btnOpenaiImportSession">Use this session</button>
-                <span class="login-status" id="openaiImportStatus"></span>
-              </div>
-              <label class="set-toggle">
-                <input type="checkbox" id="setOpenaiRemember" checked />
-                <span>Remember me (keep session after restart)</span>
-              </label>
-              <div class="set-links">
-                <a class="cta-link" id="btnOpenChatgpt">Open chatgpt.com ↗</a>
-                <a class="cta-link" id="btnOpenaiLogout">Clear ChatGPT session</a>
-              </div>
+              <!-- ChatGPT -->
+              <section class="set-card">
+                <header class="set-card-head">
+                  <span class="set-logo openai">O</span>
+                  <span class="set-card-title">ChatGPT</span>
+                  <span class="login-status" id="openaiImportStatus"></span>
+                </header>
+                <div class="set-signin">
+                  <button class="cta primary" id="btnOpenaiLogin">Sign in &amp; capture</button>
+                  <span class="login-status" id="openaiLoginStatus"></span>
+                </div>
+                <label class="set-toggle">
+                  <input type="checkbox" id="setOpenaiRemember" checked />
+                  <span>Keep me signed in after restart</span>
+                </label>
+                <details class="set-adv">
+                  <summary>Paste cookie manually</summary>
+                  <p class="set-hint">
+                    Paste the <code>__Secure-next-auth.session-token</code> cookie.
+                    ChatGPT shows plan + connection only (no usage %).
+                  </p>
+                  <input type="password" id="setOpenaiSessionKey" placeholder="eyJhbGci… or __Secure-next-auth.session-token=…" autocomplete="off" />
+                  <button class="cta ghost" id="btnOpenaiImportSession">Use this session</button>
+                </details>
+                <div class="set-links">
+                  <a class="cta-link" id="btnOpenChatgpt">Open ChatGPT ↗</a>
+                  <a class="cta-link" id="btnOpenaiLogout">Clear session</a>
+                </div>
+              </section>
             </div>
             <div class="sheet-foot">
               <button class="cta primary" id="btnSaveSettings">Save</button>

@@ -119,6 +119,89 @@ function statusNote(hasKey, connected) {
   return { note: 'Estimated — API key invalid / offline', state: 'error' };
 }
 
+// ----- Plan pricing -----
+// Monthly subscription LIST prices per service + plan. These are the real
+// published prices (flat seat fees, not usage billing), used for the cost footer
+// instead of inventing numbers. They can change, so they're written to
+// settings.json (settings.prices) as editable defaults; an override there wins.
+//
+// An entry is EITHER a number (interpreted as USD — Claude/ChatGPT bill in USD
+// globally) OR an object { myr } for a price set natively in ringgit (Google
+// prices Gemini regionally in MYR for Malaysia). `null` = no public price (e.g.
+// custom Enterprise) → the footer shows the plan only.
+//
+// Gemini (Malaysia, one.google.com/intl/en_my/about/google-ai-plans):
+//   Plus RM23.99 · Pro RM97.99 · Ultra from RM429.99 (Ultra 20x is RM979.90).
+const PLAN_PRICES = {
+  claude: { free: 0, pro: 20, max: 100, team: 30, enterprise: null },
+  openai: { free: 0, plus: 20, pro: 200, team: 30, enterprise: null },
+  gemini: {
+    free: 0,
+    plus: { myr: 23.99 },
+    pro: { myr: 97.99 },
+    advanced: { myr: 97.99 }, // legacy "Gemini Advanced" → now Google AI Pro
+    ultra: { myr: 429.99 }, // base Ultra; override to 979.90 for Ultra 20x
+  },
+};
+
+// Normalise a raw price entry (number = USD, { myr } = ringgit, { usd } = USD,
+// null = unknown) into both currencies using the USD↔MYR `rate`.
+function resolvePrice(raw, rate) {
+  if (raw == null || raw === '') return { usd: null, myr: null };
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? { usd: raw, myr: round(raw * rate, 2) } : { usd: null, myr: null };
+  }
+  if (typeof raw === 'object') {
+    if (raw.myr != null && raw.myr !== '') {
+      const m = Number(raw.myr);
+      return Number.isFinite(m) ? { usd: round(m / rate, 2), myr: round(m, 2) } : { usd: null, myr: null };
+    }
+    if (raw.usd != null && raw.usd !== '') {
+      const d = Number(raw.usd);
+      return Number.isFinite(d) ? { usd: round(d, 2), myr: round(d * rate, 2) } : { usd: null, myr: null };
+    }
+  }
+  return { usd: null, myr: null };
+}
+
+// Raw price entry for a service+plan. `overrides` (settings.prices) wins over the
+// built-in defaults; both matched case-insensitively against the plan label.
+function planPriceRaw(service, plan, overrides) {
+  const key = String(plan || '').toLowerCase();
+  const ov = overrides && overrides[service];
+  if (ov) {
+    for (const k of Object.keys(ov)) {
+      if (k.toLowerCase() === key) return ov[k];
+    }
+  }
+  const table = PLAN_PRICES[service] || {};
+  return key in table ? table[key] : null;
+}
+
+// Monthly USD price for a service+plan (back-derived from MYR-native entries).
+function planPriceUsd(service, plan, overrides, rate = 4.71) {
+  return resolvePrice(planPriceRaw(service, plan, overrides), rate).usd;
+}
+
+// Build the cost-footer shape from the plan price. Always honest: a real monthly
+// list price (or null when unknown). No randomness. `currency` is the plan's
+// NATIVE billing currency ('usd' or 'myr') so the UI can show the real figure
+// rather than a back-derived one.
+function planCost(service, plan, rate, overrides) {
+  const raw = planPriceRaw(service, plan, overrides);
+  const { usd, myr } = resolvePrice(raw, rate);
+  let currency = null;
+  if (myr != null) currency = raw && typeof raw === 'object' && raw.myr != null ? 'myr' : 'usd';
+  return {
+    plan,
+    usd, // monthly USD price (converted for MYR-native plans), or null
+    myr, // monthly MYR price (converted for USD-native plans), or null
+    currency, // 'usd' | 'myr' | null — the plan's native billing currency
+    period: 'month',
+    listed: true, // a published price, not an estimate
+  };
+}
+
 module.exports = {
   hashSeed,
   mulberry32,
@@ -132,4 +215,7 @@ module.exports = {
   formatResetsFromISO,
   pingEndpoint,
   statusNote,
+  PLAN_PRICES,
+  planPriceUsd,
+  planCost,
 };

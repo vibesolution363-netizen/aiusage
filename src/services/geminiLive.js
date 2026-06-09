@@ -219,15 +219,24 @@ function buildScript() {
 async function fetchUsage(usageUrl) {
   const url = usageUrl && String(usageUrl).trim() ? String(usageUrl).trim() : DEFAULT_USAGE_URL;
   if (!(await isAuthed())) return { authed: false, data: null };
+  let timer = null;
   try {
     await ensureWorker(url);
     const result = await Promise.race([
       worker.webContents.executeJavaScript(buildScript(), true),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('gemini live timeout')), 16000)),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('gemini live timeout')), 16000);
+      }),
     ]);
     return result || { authed: true, data: null };
   } catch (err) {
     return { authed: true, data: null, error: String((err && err.message) || err) };
+  } finally {
+    // Clear the race timeout so it doesn't linger holding a closure, then recycle
+    // the hidden worker so the gemini.google.com page isn't left resident between
+    // refreshes (bounds memory over long uptime).
+    if (timer) clearTimeout(timer);
+    destroy();
   }
 }
 

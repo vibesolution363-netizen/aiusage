@@ -10,6 +10,7 @@ const openaiUsage = require('./services/openaiUsage');
 const openaiLive = require('./services/openaiLive');
 const geminiUsage = require('./services/geminiUsage');
 const geminiLive = require('./services/geminiLive');
+const { PLAN_PRICES } = require('./services/util');
 
 // ---------- Constants ----------
 const WIN_WIDTH = 260;
@@ -51,6 +52,12 @@ const DEFAULT_SETTINGS = {
     // Remember the chatgpt.com session across restarts (persistent cookie jar).
     rememberMe: true,
   },
+  // Monthly subscription LIST prices per plan, shown in the cost footer. Flat
+  // seat fees, not usage billing. Each entry is a number (USD — Claude/ChatGPT
+  // bill in USD) or { "myr": N } for a ringgit-native price (Gemini in Malaysia).
+  // Edit here if yours differ; `null` = no public price (e.g. Enterprise) and the
+  // footer shows the plan only. (Defaults: services/util.js → PLAN_PRICES.)
+  prices: JSON.parse(JSON.stringify(PLAN_PRICES)),
 };
 
 // ---------- State ----------
@@ -81,7 +88,7 @@ function getSettingsFile() {
 function getAssetPath(...p) {
   const base = app.isPackaged ? path.join(process.resourcesPath, 'app.asar.unpacked') : path.join(__dirname, '..');
   return path.join(base, 'assets', ...p);
-}
+}~
 
 // ---------- Settings helpers ----------
 function deepMerge(base, override) {
@@ -354,7 +361,7 @@ async function claudeData(rate) {
       /* ignore */
     }
   }
-  return claudeUsage.build({ live, manual: cfg.manual, rate });
+  return claudeUsage.build({ live, manual: cfg.manual, rate, prices: settings.prices });
 }
 
 // Gemini: try live gemini.google.com scrape, then manual values.
@@ -374,7 +381,7 @@ async function geminiData(rate) {
       /* ignore */
     }
   }
-  return geminiUsage.build({ live, manual: cfg.manual, rate });
+  return geminiUsage.build({ live, manual: cfg.manual, rate, prices: settings.prices });
 }
 
 // ChatGPT: read plan + connection from a signed-in chatgpt.com session.
@@ -394,7 +401,7 @@ async function openaiData(rate) {
       /* ignore */
     }
   }
-  return openaiUsage.build({ live, rate });
+  return openaiUsage.build({ live, rate, prices: settings.prices });
 }
 
 async function getUsage(service) {

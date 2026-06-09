@@ -148,13 +148,22 @@ function metricRow(m) {
 
 function costFooter(d) {
   const c = d.cost || {};
-  const hasToday = c.today != null;
-  const est = c.estimated ? 'est. ' : '';
-  const top = hasToday ? `${est}$${money(c.today)} today` : `${est}$${money(c.month)} this month`;
-  const sub = hasToday ? `$${money(c.month)} / 30d` : `seat · monthly`;
+  // Unknown / custom price (e.g. Enterprise) → show the plan, no figure.
+  if (c.myr == null) {
+    return (
+      `<div class="cost">` +
+      `<div class="cost-left"><span>${d.plan} plan</span><span>price not set</span></div>` +
+      `<div class="cost-right">—</div>` +
+      `</div>`
+    );
+  }
+  // Show the price in its native currency so the figure is the real list price.
+  // USD-billed plans (Claude/ChatGPT) show "$X / month"; ringgit-native plans
+  // (Gemini in Malaysia) just show "per month" since RM is already on the right.
+  const sub = c.currency === 'usd' ? `$${money(c.usd)} / month` : 'per month';
   return (
     `<div class="cost">` +
-    `<div class="cost-left"><span>${top}</span><span>${sub}</span></div>` +
+    `<div class="cost-left"><span>${d.plan} plan</span><span>${sub}</span></div>` +
     `<div class="cost-right">RM ${money(c.myr)}</div>` +
     `</div>`
   );
@@ -236,7 +245,6 @@ function renderAll(all) {
   const onCells = Math.round(avg * 10);
   const cells = Array.from({ length: 10 }, (_, i) => `<div class="cell ${i < onCells ? 'on' : ''}"></div>`).join('');
 
-  const totalMonth = svcs.reduce((s, d) => s + ((d.cost && d.cost.month) || 0), 0);
   const totalMyr = svcs.reduce((s, d) => s + ((d.cost && d.cost.myr) || 0), 0);
 
   return (
@@ -245,7 +253,7 @@ function renderAll(all) {
     `<div class="cells-cap">Token capacity · avg</div>` +
     `<div class="cells">${cells}</div>` +
     `<div class="cost total">` +
-    `<div class="cost-left"><span>Total spend (est.)</span><span>$${money(totalMonth)} / 30d</span></div>` +
+    `<div class="cost-left"><span>Plans total</span><span>per month</span></div>` +
     `<div class="cost-right">RM ${money(totalMyr)}</div>` +
     `</div></div>`
   );

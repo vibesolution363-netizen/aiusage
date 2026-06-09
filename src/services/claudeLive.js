@@ -221,15 +221,24 @@ function buildScript(endpoints) {
 async function fetchUsage(endpoints) {
   const list = endpoints && endpoints.length ? endpoints : DEFAULT_ENDPOINTS;
   if (!(await isAuthed())) return { authed: false, data: null };
+  let timer = null;
   try {
     await ensureWorker();
     const result = await Promise.race([
       worker.webContents.executeJavaScript(buildScript(list), true),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('claude live timeout')), 14000)),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('claude live timeout')), 14000);
+      }),
     ]);
     return result || { authed: true, data: null };
   } catch (err) {
     return { authed: true, data: null, error: String((err && err.message) || err) };
+  } finally {
+    // Clear the race timeout so it doesn't linger holding a closure, then recycle
+    // the hidden worker so the heavy claude.ai SPA isn't left resident between
+    // refreshes (bounds memory over long uptime).
+    if (timer) clearTimeout(timer);
+    destroy();
   }
 }
 

@@ -211,15 +211,24 @@ function buildScript() {
 // Returns { authed, plan, error? }
 async function fetchUsage() {
   if (!(await isAuthed())) return { authed: false, plan: null };
+  let timer = null;
   try {
     await ensureWorker();
     const result = await Promise.race([
       worker.webContents.executeJavaScript(buildScript(), true),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('openai live timeout')), 14000)),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('openai live timeout')), 14000);
+      }),
     ]);
     return result || { authed: true, plan: null };
   } catch (err) {
     return { authed: true, plan: null, error: String((err && err.message) || err) };
+  } finally {
+    // Clear the race timeout so it doesn't linger holding a closure, then recycle
+    // the hidden worker so the chatgpt.com SPA isn't left resident between
+    // refreshes (bounds memory over long uptime).
+    if (timer) clearTimeout(timer);
+    destroy();
   }
 }
 

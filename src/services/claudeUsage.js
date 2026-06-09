@@ -15,7 +15,7 @@ const u = require('./util');
  * Only the cost + sparkline trend are estimated (clearly secondary), and the
  * sparkline is shaped to end at the real used value.
  */
-function build({ live, manual, rate } = {}) {
+function build({ live, manual, rate, prices } = {}) {
   live = live || { authed: false, data: null };
   manual = manual || {};
   rate = rate || 4.71;
@@ -67,9 +67,6 @@ function build({ live, manual, rate } = {}) {
 
   const needsSetup = metrics.length === 0;
 
-  // Estimated, secondary info.
-  const today = u.round(0.6 + rng() * 4.5, 2);
-  const month = u.round(today * (12 + rng() * 16), 2);
   const sparkEnd = sessionUsed != null ? sessionUsed : weeklyUsed != null ? weeklyUsed : 0.4;
 
   return {
@@ -89,13 +86,7 @@ function build({ live, manual, rate } = {}) {
     // Spec-required core shape (null when we genuinely don't have the value):
     session: sessionUsed != null ? { used: Math.round(sessionUsed * 1000), total: 1000, percent: round3(sessionUsed) } : null,
     weekly: weeklyUsed != null ? { used: Math.round(weeklyUsed * 7000), total: 7000, percent: round3(weeklyUsed) } : null,
-    cost: {
-      today,
-      month,
-      myr: u.round(month * rate, 2),
-      todayMyr: u.round(today * rate, 2),
-      estimated: true,
-    },
+    cost: u.planCost('claude', plan, rate, prices),
 
     metrics,
     sparkline: u.makeSparklineTo(rng, 16, sparkEnd),

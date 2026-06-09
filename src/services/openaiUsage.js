@@ -3,79 +3,67 @@
 const u = require('./util');
 
 /*
- * OpenAI usage.
+ * ChatGPT (OpenAI) panel data.
  *
- * The dashboard usage figures are not available via a standard API key
- * (they require a session token). We validate the key with a lightweight
- * GET /v1/models and present estimated usage. Never throws.
+ * Unlike Claude/Gemini, ChatGPT does not publish a usage-limits page with
+ * percentages, so there are no real session/weekly numbers to show. What is
+ * real here is the connection state and the account plan, read live from a
+ * signed-in chatgpt.com session (see openaiLive.js):
+ *   - source 'connected' : signed in; plan known, usage % not published
+ *   - source 'setup'     : not signed in
+ *
+ * The cost + sparkline are estimated, clearly secondary.
  */
-async function fetchUsage(apiKey, rate = 4.71) {
-  const hasKey = !!(apiKey && apiKey.trim());
-  let connected = false;
+function build({ live, rate } = {}) {
+  live = live || { authed: false };
+  rate = rate || 4.71;
 
-  if (hasKey) {
-    connected = await u.pingEndpoint('https://api.openai.com/v1/models', {
-      Authorization: `Bearer ${apiKey}`,
-    });
-  }
-
-  return build(hasKey, connected, rate);
-}
-
-function build(hasKey, connected, rate) {
   const rng = u.rngFor('openai');
-  const { note, state } = u.statusNote(hasKey, connected);
+  const authed = !!live.authed;
+  const plan = (live.plan && String(live.plan)) || (authed ? 'Plus' : 'Free');
 
-  const sessionPct = u.jitter(0.3 + rng() * 0.4);
-  const weeklyPct = u.jitter(0.4 + rng() * 0.4);
+  const source = authed ? 'connected' : 'setup';
+  const NOTES = {
+    connected: 'Live · chatgpt.com',
+    setup: 'Not connected — add your session key',
+  };
+  const STATES = { connected: 'connected', setup: 'nokey' };
 
-  const sessionResetH = 0.2 + rng() * 1.2;
-  const weeklyResetH = 24 + rng() * 120;
+  // ChatGPT exposes no usage percentages → no metric bars, ever.
+  const needsSetup = !authed;
+  const infoMsg = authed ? 'Connected ✓ — ChatGPT does not publish usage %' : '';
 
   const today = u.round(0.4 + rng() * 3.2, 2);
   const month = u.round(today * (10 + rng() * 18), 2);
 
   return {
     service: 'openai',
-    name: 'OpenAI',
-    initial: 'G',
-    plan: 'Pro',
+    name: 'ChatGPT',
+    initial: 'O',
+    plan,
     model: 'gpt-4o',
     modelText: 'GPT-4o',
-    simulated: !connected,
-    note,
-    state,
+    source,
+    note: NOTES[source],
+    state: STATES[source],
+    simulated: false,
+    needsSetup,
+    canLogin: true,
+    infoMsg,
 
-    // Spec-required core shape:
-    session: { percent: u.round(sessionPct, 3) },
-    weekly: { percent: u.round(weeklyPct, 3) },
+    session: null,
+    weekly: null,
     cost: {
       today,
       month,
       myr: u.round(month * rate, 2),
       todayMyr: u.round(today * rate, 2),
+      estimated: true,
     },
 
-    metrics: [
-      {
-        key: 'session',
-        label: 'SESSION',
-        percent: u.round(sessionPct, 3),
-        leftText: `${Math.round((1 - sessionPct) * 100)}% left`,
-        resets: u.formatResets(sessionResetH),
-        color: 'green',
-      },
-      {
-        key: 'weekly',
-        label: 'WEEKLY',
-        percent: u.round(weeklyPct, 3),
-        leftText: `${Math.round((1 - weeklyPct) * 100)}% left`,
-        resets: u.formatResets(weeklyResetH),
-        color: 'teal',
-      },
-    ],
-    sparkline: u.makeSparkline(rng, 16, 0.35, 0.24),
+    metrics: [],
+    sparkline: u.makeSparkline(rng, 16, 0.35, 0.2),
   };
 }
 
-module.exports = { fetchUsage };
+module.exports = { build };

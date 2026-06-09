@@ -22,8 +22,29 @@
 
 const { BrowserWindow, session } = require('electron');
 
-const PARTITION = 'persist:claude';
+// Two cookie jars: a persistent one (survives restarts → "Remember me") and an
+// in-memory one (cleared when the app quits → login only for this run).
+const PARTITION_PERSIST = 'persist:claude';
+const PARTITION_SESSION = 'claude';
 const BASE = 'https://claude.ai';
+
+// When true we use the persistent partition. Synced from settings by main.js
+// via setRemember(). Defaults to true to match the previous behaviour.
+let remember = true;
+
+function partitionName() {
+  return remember ? PARTITION_PERSIST : PARTITION_SESSION;
+}
+
+// Switch between the persistent / in-memory cookie jars. If the choice changes
+// we drop the worker so the next fetch rebuilds it against the right session.
+function setRemember(value) {
+  const next = value !== false;
+  if (next !== remember) {
+    remember = next;
+    destroy();
+  }
+}
 
 // {org} is replaced with the user's organization uuid (from /api/organizations).
 const DEFAULT_ENDPOINTS = [
@@ -37,7 +58,7 @@ const DEFAULT_ENDPOINTS = [
 let worker = null;
 
 function ses() {
-  return session.fromPartition(PARTITION);
+  return session.fromPartition(partitionName());
 }
 
 // Logged in if claude.ai has set a non-empty sessionKey cookie.
@@ -50,26 +71,23 @@ async function isAuthed() {
   }
 }
 
-// Open a real browser window for the user to sign in. Resolves with auth state
-// once the window is closed.
+// Open a real login window on our partition. The user signs in once; the
+// cookies land in our jar automatically (no copy/paste). Resolves with the
+// auth state after the window is closed.
 function openLogin() {
+  const part = partitionName();
   return new Promise((resolve) => {
     const win = new BrowserWindow({
       width: 460,
       height: 760,
-      title: 'Log in to Claude — claude.ai',
+      title: 'Sign in — claude.ai',
       autoHideMenuBar: true,
       backgroundColor: '#0a0e1a',
-      webPreferences: {
-        partition: PARTITION,
-        contextIsolation: true,
-        nodeIntegration: false,
-      },
+      webPreferences: { partition: part, contextIsolation: true, nodeIntegration: false },
     });
-    // Allow OAuth popups, sharing the same session partition.
     win.webContents.setWindowOpenHandler(() => ({
       action: 'allow',
-      overrideBrowserWindowOptions: { webPreferences: { partition: PARTITION } },
+      overrideBrowserWindowOptions: { webPreferences: { partition: part } },
     }));
     win.loadURL(`${BASE}/login`);
     win.on('closed', async () => resolve(await isAuthed()));
@@ -85,12 +103,41 @@ async function clearSession() {
   }
 }
 
+// Reuse an already-logged-in browser session without opening a login window:
+// the user pastes the `sessionKey` cookie value from their browser (DevTools →
+// Application → Cookies → claude.ai → sessionKey) and we set it on our jar.
+// Returns true if the key authenticates against claude.ai.
+async function importSession(rawKey) {
+  const value = String(rawKey || '').trim();
+  if (!value) return false;
+  // One year out so the persistent jar keeps it across restarts; claude.ai will
+  // reject it sooner if the real session expires, and we fall back gracefully.
+  const expirationDate = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365;
+  try {
+    await ses().cookies.set({
+      url: BASE,
+      name: 'sessionKey',
+      value,
+      domain: '.claude.ai',
+      path: '/',
+      secure: true,
+      httpOnly: true,
+      sameSite: 'lax',
+      expirationDate,
+    });
+    destroy(); // rebuild the worker so the new cookie is in effect
+    return await isAuthed();
+  } catch {
+    return false;
+  }
+}
+
 function ensureWorker() {
   if (worker && !worker.isDestroyed()) return Promise.resolve();
   worker = new BrowserWindow({
     show: false,
     webPreferences: {
-      partition: PARTITION,
+      partition: partitionName(),
       contextIsolation: true,
       nodeIntegration: false,
       images: false,
@@ -107,7 +154,7 @@ function ensureWorker() {
 function buildScript(endpoints) {
   return (
     '(async () => {' +
-    'const out={authed:true,tried:[],data:null,endpoint:null,raw:null};' +
+    'const out={authed:true,tried:[],data:null,endpoint:null,raw:null,plan:null};' +
     'function pick(o,ks){for(const k of ks){if(o&&o[k]!=null)return o[k];}return null;}' +
     'function usedFrom(o){if(!o||typeof o!=="object")return null;' +
     'let u=pick(o,["utilization","used_percent","usedPercent","percent_used","percentUsed","percent","pct_used"]);' +
@@ -133,6 +180,13 @@ function buildScript(endpoints) {
     'let org=null;const orgs=await gj("/api/organizations");' +
     'if(orgs.status===401||orgs.status===403){out.authed=false;return out;}' +
     'if(orgs.j&&Array.isArray(orgs.j)&&orgs.j[0]){org=orgs.j[0].uuid||(orgs.j[0].organization&&orgs.j[0].organization.uuid)||null;}' +
+    // Best-effort plan from the org capabilities/raw JSON (e.g. "claude_pro").
+    'try{const b=JSON.stringify(orgs.j||"").toLowerCase();' +
+    'if(/max_20x|max_5x|claude_max/.test(b))out.plan="Max";' +
+    'else if(/claude_pro|raven_pro/.test(b))out.plan="Pro";' +
+    'else if(/claude_team/.test(b))out.plan="Team";' +
+    'else if(/claude_enterprise|enterprise/.test(b))out.plan="Enterprise";' +
+    'else if(/claude_free|"free"/.test(b))out.plan="Free";}catch(e){}' +
     'const cands=' +
     JSON.stringify(endpoints) +
     ';for(const c of cands){if(c.indexOf("{org}")>=0&&!org)continue;const u=c.replace("{org}",org||"");' +
@@ -166,4 +220,16 @@ function destroy() {
   worker = null;
 }
 
-module.exports = { isAuthed, openLogin, clearSession, fetchUsage, destroy, buildScript, PARTITION, DEFAULT_ENDPOINTS };
+module.exports = {
+  isAuthed,
+  openLogin,
+  clearSession,
+  importSession,
+  setRemember,
+  fetchUsage,
+  destroy,
+  buildScript,
+  PARTITION_PERSIST,
+  PARTITION_SESSION,
+  DEFAULT_ENDPOINTS,
+};

@@ -19,10 +19,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Data
   fetchUsage: (service) => ipcRenderer.invoke('fetch-usage', service),
 
-  // Claude live session (Option 1)
-  claudeLogin: () => ipcRenderer.invoke('claude-login'),
+  // Claude live session
+  claudeImportSession: (key, remember) => ipcRenderer.invoke('claude-import-session', key, remember),
   claudeLogout: () => ipcRenderer.invoke('claude-logout'),
   claudeStatus: () => ipcRenderer.invoke('claude-status'),
+
+  // Gemini live session
+  geminiImportSession: (key, remember) => ipcRenderer.invoke('gemini-import-session', key, remember),
+  geminiLogout: () => ipcRenderer.invoke('gemini-logout'),
+  geminiStatus: () => ipcRenderer.invoke('gemini-status'),
+
+  // ChatGPT (OpenAI) live session
+  openaiImportSession: (key, remember) => ipcRenderer.invoke('openai-import-session', key, remember),
+  openaiLogout: () => ipcRenderer.invoke('openai-logout'),
+  openaiStatus: () => ipcRenderer.invoke('openai-status'),
 
   // Shell
   openSettingsFile: () => ipcRenderer.send('open-settings-file'),

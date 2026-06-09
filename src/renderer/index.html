@@ -20,7 +20,6 @@
         <header class="titlebar" id="titlebar">
           <div class="brand">
             <span class="brand-icon">⚡</span>
-            <span class="brand-name">AI USAGE</span>
           </div>
           <div class="title-actions">
             <span class="clock" id="clock">--:--</span>
@@ -33,12 +32,11 @@
 
         <!-- Collapsible body -->
         <div class="body" id="body">
-          <!-- Tabs -->
+          <!-- Tabs (rendered dynamically from enabled services) -->
           <nav class="tabs" id="tabs">
-            <button class="tab" data-tab="claude">Claude</button>
-            <button class="tab" data-tab="openai">OpenAI</button>
-            <button class="tab" data-tab="copilot">Copilot</button>
-            <button class="tab" data-tab="all">All</button>
+            <div class="tab-list" id="tabList"></div>
+            <button class="tab-add no-drag" id="addTabBtn" title="Add AI usage">+</button>
+            <div class="add-menu" id="addMenu" hidden></div>
           </nav>
 
           <!-- Status line -->
@@ -49,6 +47,9 @@
 
           <!-- Active panel injected here -->
           <main class="panel-container" id="panel"></main>
+
+          <!-- App branding (moved out of the header) -->
+          <div class="app-brand">AI USAGE</div>
         </div>
 
         <!-- Settings overlay -->
@@ -59,41 +60,79 @@
               <button class="icon-btn no-drag" id="overlayClose" title="Close">×</button>
             </div>
             <div class="sheet-body">
-              <div class="set-section">Claude data source</div>
-              <label class="set-toggle">
-                <input type="checkbox" id="setLive" />
-                <span>Use live claude.ai data (Option 1)</span>
+              <div class="set-section">Claude session</div>
+              <p class="set-hint">
+                Paste your claude.ai <code>sessionKey</code> cookie. Get it from
+                DevTools → Application → Cookies → claude.ai → <code>sessionKey</code>.
+              </p>
+              <label class="set-field">
+                <span>sessionKey</span>
+                <input type="password" id="setSessionKey" placeholder="sk-ant-sid01-…" autocomplete="off" />
               </label>
               <div class="set-actions">
-                <button class="cta" id="btnLogin">Log in to Claude</button>
-                <span class="login-status" id="loginStatus">checking…</span>
+                <button class="cta" id="btnImportSession">Use this session</button>
+                <span class="login-status" id="importStatus"></span>
               </div>
+              <label class="set-toggle">
+                <input type="checkbox" id="setRemember" checked />
+                <span>Remember me (keep session after restart)</span>
+              </label>
               <div class="set-links">
                 <a class="cta-link" id="btnOpenClaude">Open claude.ai → Settings → Usage ↗</a>
-                <a class="cta-link" id="btnLogout">Log out of claude.ai</a>
+                <a class="cta-link" id="btnLogout">Clear claude.ai session</a>
               </div>
 
-              <div class="set-section">Manual entry (Option 2 · always accurate)</div>
-              <label class="set-toggle">
-                <input type="checkbox" id="setManual" />
-                <span>Use manual values</span>
-              </label>
-              <label class="set-field">
-                <span>Session used %</span>
-                <input type="number" id="setSession" min="0" max="100" step="1" placeholder="e.g. 70" />
-              </label>
-              <label class="set-field">
-                <span>Weekly used %</span>
-                <input type="number" id="setWeekly" min="0" max="100" step="1" placeholder="e.g. 45" />
-              </label>
-              <label class="set-field">
-                <span>Plan</span>
-                <input type="text" id="setPlan" placeholder="Max" />
-              </label>
+              <div class="set-divider"></div>
+
+              <div class="set-section">Gemini session</div>
               <p class="set-hint">
-                Enter the “% used” shown on claude.ai. The dock displays the
-                remaining amount (e.g. 70% used → “30% left”).
+                Paste your gemini.google.com cookies. Easiest: DevTools → Network →
+                click any request → Request Headers → copy the whole
+                <code>Cookie:</code> value and paste it here (Google needs several
+                cookies, not just one).
               </p>
+              <label class="set-field">
+                <span>Cookies</span>
+                <input type="password" id="setGeminiSessionKey" placeholder="__Secure-1PSID=…; __Secure-1PSIDTS=…; …" autocomplete="off" />
+              </label>
+              <div class="set-actions">
+                <button class="cta" id="btnGeminiImportSession">Use this session</button>
+                <span class="login-status" id="geminiImportStatus"></span>
+              </div>
+              <label class="set-toggle">
+                <input type="checkbox" id="setGeminiRemember" checked />
+                <span>Remember me (keep session after restart)</span>
+              </label>
+              <div class="set-links">
+                <a class="cta-link" id="btnOpenGemini">Open gemini.google.com ↗</a>
+                <a class="cta-link" id="btnGeminiLogout">Clear Google session</a>
+              </div>
+
+              <div class="set-divider"></div>
+
+              <div class="set-section">ChatGPT session</div>
+              <p class="set-hint">
+                Paste your chatgpt.com <code>__Secure-next-auth.session-token</code>
+                cookie (DevTools → Application → Cookies → chatgpt.com), or the whole
+                <code>Cookie:</code> header. Note: ChatGPT does not publish usage %, so
+                only your plan + connection are shown.
+              </p>
+              <label class="set-field">
+                <span>Session token</span>
+                <input type="password" id="setOpenaiSessionKey" placeholder="eyJhbGci… or __Secure-next-auth.session-token=…" autocomplete="off" />
+              </label>
+              <div class="set-actions">
+                <button class="cta" id="btnOpenaiImportSession">Use this session</button>
+                <span class="login-status" id="openaiImportStatus"></span>
+              </div>
+              <label class="set-toggle">
+                <input type="checkbox" id="setOpenaiRemember" checked />
+                <span>Remember me (keep session after restart)</span>
+              </label>
+              <div class="set-links">
+                <a class="cta-link" id="btnOpenChatgpt">Open chatgpt.com ↗</a>
+                <a class="cta-link" id="btnOpenaiLogout">Clear ChatGPT session</a>
+              </div>
             </div>
             <div class="sheet-foot">
               <button class="cta primary" id="btnSaveSettings">Save</button>

@@ -3,26 +3,26 @@
 const u = require('./util');
 
 /*
- * Claude usage panel data.
+ * Gemini usage panel data.
  *
  * The usage percentages are REAL, never simulated:
- *   - source 'live'   : pulled from claude.ai (see claudeLive.js)
- *   - source 'manual' : values the user typed from claude.ai → Settings → Usage
- *   - source 'unavailable' : logged in but the endpoint couldn't be read
- *   - source 'setup'  : not logged in and no manual values yet
+ *   - source 'live'        : scraped from gemini.google.com (see geminiLive.js)
+ *   - source 'manual'      : values the user typed from the Gemini "Usage limits" page
+ *   - source 'unavailable' : signed in but the page couldn't be read
+ *   - source 'setup'       : not signed in and no manual values yet
  *
- * Canonical value is USED fraction (0..1). "left" is always 100 - used.
- * Only the cost + sparkline trend are estimated (clearly secondary), and the
- * sparkline is shaped to end at the real used value.
+ * Canonical value is USED fraction (0..1). Only the cost + sparkline trend are
+ * estimated (clearly secondary); the sparkline ends at the real used value.
  */
 function build({ live, manual, rate } = {}) {
   live = live || { authed: false, data: null };
   manual = manual || {};
   rate = rate || 4.71;
 
-  const rng = u.rngFor('claude');
-  // Prefer the plan detected live from claude.ai, then any manual override.
-  const plan = (live.plan && String(live.plan)) || (manual.plan && String(manual.plan)) || 'Max';
+  const rng = u.rngFor('gemini');
+  // Prefer the plan scraped live from the usage page (e.g. "Plus"), then any
+  // manual override, then a sensible default.
+  const plan = (live.plan && String(live.plan)) || (manual.plan && String(manual.plan)) || 'Pro';
 
   const liveData = live.data;
   const hasLive = !!(liveData && (liveData.session || liveData.weekly));
@@ -37,11 +37,11 @@ function build({ live, manual, rate } = {}) {
     source = 'live';
     if (liveData.session) {
       sessionUsed = clamp01(liveData.session.used);
-      sessionReset = u.formatResetsFromISO(liveData.session.resets);
+      sessionReset = resetText(liveData.session.resets);
     }
     if (liveData.weekly) {
       weeklyUsed = clamp01(liveData.weekly.used);
-      weeklyReset = u.formatResetsFromISO(liveData.weekly.resets);
+      weeklyReset = resetText(liveData.weekly.resets);
     }
   } else if (manual.enabled && (isNum(manual.sessionUsed) || isNum(manual.weeklyUsed))) {
     source = 'manual';
@@ -54,7 +54,7 @@ function build({ live, manual, rate } = {}) {
   }
 
   const NOTES = {
-    live: 'Live · claude.ai',
+    live: 'Live · gemini.google.com',
     manual: 'Manual entry',
     unavailable: 'Connected — usage not readable yet',
     setup: 'Not connected — add your session key',
@@ -62,23 +62,23 @@ function build({ live, manual, rate } = {}) {
   const STATES = { live: 'connected', manual: 'connected', unavailable: 'error', setup: 'nokey' };
 
   const metrics = [];
-  if (sessionUsed != null) metrics.push(metricRow('session', 'SESSION', sessionUsed, sessionReset, 'amber'));
-  if (weeklyUsed != null) metrics.push(metricRow('weekly', 'WEEKLY', weeklyUsed, weeklyReset, 'violet'));
+  if (sessionUsed != null) metrics.push(metricRow('session', 'CURRENT', sessionUsed, sessionReset, 'violet'));
+  if (weeklyUsed != null) metrics.push(metricRow('weekly', 'WEEKLY', weeklyUsed, weeklyReset, 'indigo'));
 
   const needsSetup = metrics.length === 0;
 
   // Estimated, secondary info.
-  const today = u.round(0.6 + rng() * 4.5, 2);
-  const month = u.round(today * (12 + rng() * 16), 2);
-  const sparkEnd = sessionUsed != null ? sessionUsed : weeklyUsed != null ? weeklyUsed : 0.4;
+  const today = u.round(0.3 + rng() * 2.8, 2);
+  const month = u.round(today * (10 + rng() * 18), 2);
+  const sparkEnd = sessionUsed != null ? sessionUsed : weeklyUsed != null ? weeklyUsed : 0.35;
 
   return {
-    service: 'claude',
-    name: 'Claude',
-    initial: 'C',
+    service: 'gemini',
+    name: 'Gemini',
+    initial: '✦',
     plan,
-    model: 'claude-sonnet-4-6',
-    modelText: 'Sonnet 4.6',
+    model: 'gemini-2.5-pro',
+    modelText: 'Gemini 2.5 Pro',
     source,
     note: NOTES[source],
     state: STATES[source],
@@ -99,7 +99,6 @@ function build({ live, manual, rate } = {}) {
 
     metrics,
     sparkline: u.makeSparklineTo(rng, 16, sparkEnd),
-    endpoint: live.endpoint || null,
   };
 }
 
@@ -109,11 +108,19 @@ function metricRow(key, label, used, resets, color) {
     key,
     label,
     color,
-    percent: round3(used), // used fraction → bar fill width
-    usedText: `${Math.round(used * 100)}% used`, // what the dock shows on the right (matches claude.ai)
-    leftText: `${left}% left`, // kept for reference / alt display
+    percent: round3(used),
+    usedText: `${Math.round(used * 100)}% used`,
+    leftText: `${left}% left`,
     resets: resets || '',
   };
+}
+
+// Live resets arrive as the human-readable text scraped from the page
+// (e.g. "Resets at 11:22 AM"); show it as-is, lower-cased to match the dock.
+function resetText(v) {
+  if (!v) return '';
+  const s = String(v).trim();
+  return s.charAt(0).toLowerCase() + s.slice(1);
 }
 
 function clamp01(v) {

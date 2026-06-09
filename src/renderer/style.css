@@ -46,7 +46,6 @@ body {
 .app {
   width: 100%;
   height: 100%;
-  padding: 8px;
 }
 
 .dock {
@@ -58,7 +57,7 @@ body {
   -webkit-backdrop-filter: blur(22px) saturate(140%);
   border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   overflow: hidden;
 }
 
@@ -67,7 +66,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 11px 12px 9px;
   border-bottom: 1px solid var(--border);
   -webkit-app-region: no-drag;
 }
@@ -75,39 +75,48 @@ body {
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  min-width: 0; /* allow the title to shrink so the action icons stay visible */
+  overflow: hidden;
 }
 
 .brand-icon {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  font-size: 12px;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  font-size: 11px;
   background: linear-gradient(135deg, var(--amber), var(--red));
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
 }
 
-.brand-name {
+/* App name, moved below the panel (see .app-brand). */
+.app-brand {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 12px;
-  letter-spacing: 2px;
+  font-size: 11px;
+  letter-spacing: 3px;
   text-transform: uppercase;
+  text-align: center;
+  color: var(--text-faint);
+  padding: 4px 0 10px;
 }
 
 .title-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  flex-shrink: 0;
 }
 
 .clock {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-dim);
   margin-right: 4px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
 }
 
 .icon-btn {
@@ -118,19 +127,25 @@ body {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--text-dim);
+  color: rgba(255, 255, 255, 0.72);
   font-size: 13px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
   color: var(--text);
 }
 
+/* Close button: a touch more prominent so it's always easy to find. */
+.icon-btn.close {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 15px;
+}
+
 .icon-btn.close:hover {
-  background: rgba(239, 68, 68, 0.22);
+  background: rgba(239, 68, 68, 0.9);
   color: #fff;
 }
 
@@ -162,14 +177,28 @@ body {
 
 /* ---------------- Tabs ---------------- */
 .tabs {
+  position: relative;
   display: flex;
-  gap: 3px;
+  align-items: center;
+  gap: 4px;
   padding: 8px 10px 4px;
 }
 
-.tab {
+.tab-list {
+  display: flex;
   flex: 1;
-  padding: 6px 0;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tab {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 6px;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -180,6 +209,7 @@ body {
   letter-spacing: 0.3px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
 }
 
 .tab:hover {
@@ -189,6 +219,93 @@ body {
 .tab.active {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
+}
+
+.tab-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-faint);
+  opacity: 0.6;
+  transition: background 0.15s, opacity 0.15s, color 0.15s;
+}
+
+.tab-remove:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  opacity: 1;
+}
+
+/* "+" add button */
+.tab-add {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.tab-add:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
+/* Add-service dropdown */
+.add-menu {
+  position: absolute;
+  top: 36px;
+  right: 10px;
+  z-index: 20;
+  min-width: 120px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #1b1d22;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.add-menu[hidden] {
+  display: none;
+}
+
+.add-item {
+  text-align: left;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.add-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.add-empty {
+  padding: 7px 10px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 10px;
 }
 
 /* ---------------- Status line ---------------- */
@@ -271,8 +388,8 @@ body {
 .svc-logo.openai {
   background: #10a37f;
 }
-.svc-logo.copilot {
-  background: linear-gradient(135deg, #1f6feb, #388bfd);
+.svc-logo.gemini {
+  background: linear-gradient(135deg, #4285f4, #9b72cb, #d96570);
 }
 
 .svc-name {
@@ -302,10 +419,26 @@ body {
   border: 1px solid rgba(16, 163, 127, 0.35);
 }
 .badge.enterprise,
-.badge.business {
+.badge.business,
+.badge.team {
   background: rgba(56, 139, 253, 0.18);
   color: #93c5fd;
   border: 1px solid rgba(56, 139, 253, 0.35);
+}
+.badge.plus {
+  background: rgba(99, 102, 241, 0.18);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+}
+.badge.ultra {
+  background: rgba(168, 85, 247, 0.18);
+  color: #d8b4fe;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+.badge.free {
+  background: rgba(148, 163, 184, 0.16);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.32);
 }
 
 /* ---------------- Metric rows ---------------- */
@@ -635,12 +768,14 @@ body {
 .t-value {
   font-size: 10px;
   color: var(--amber);
-  min-width: 30px;
+  min-width: 34px;
+  flex-shrink: 0;
   text-align: right;
 }
 
 input[type='range'] {
   flex: 1;
+  min-width: 0;
   -webkit-appearance: none;
   appearance: none;
   height: 4px;
@@ -786,6 +921,12 @@ input[type='range']::-webkit-slider-thumb {
 }
 .set-section:first-child {
   margin-top: 2px;
+}
+
+.set-divider {
+  height: 1px;
+  margin: 16px 0 4px;
+  background: var(--border);
 }
 
 .set-toggle {

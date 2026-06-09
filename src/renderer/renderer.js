@@ -8,12 +8,21 @@ const FULL_HEIGHT = 480;
 const COLLAPSED_HEIGHT = 116;
 
 // Primary colour used for each service's sparkline + overview bar.
-const SVC_COLOR = { claude: 'amber', openai: 'green', copilot: 'blue' };
+const SVC_COLOR = { claude: 'amber', openai: 'green', gemini: 'violet' };
+
+// Service catalog. Claude is permanent; the rest are opt-in via the "+" button.
+const SERVICES = {
+  claude: { label: 'Claude' },
+  openai: { label: 'ChatGPT' },
+  gemini: { label: 'Gemini' },
+};
+const ADDABLE = ['openai', 'gemini'];
 
 const state = {
   settings: null,
-  data: {}, // { claude, openai, copilot }
+  data: {}, // { claude, openai, gemini }
   activeTab: 'claude',
+  enabledServices: ['claude'], // tabs the user has chosen to show
   collapsed: false,
   loading: false,
 };
@@ -28,28 +37,46 @@ const el = {
   collapseBtn: document.getElementById('collapseBtn'),
   closeBtn: document.getElementById('closeBtn'),
   tabs: document.getElementById('tabs'),
+  tabList: document.getElementById('tabList'),
+  addTabBtn: document.getElementById('addTabBtn'),
+  addMenu: document.getElementById('addMenu'),
   updated: document.getElementById('updated'),
   source: document.getElementById('source'),
   panel: document.getElementById('panel'),
   opacity: document.getElementById('opacity'),
   opacityValue: document.getElementById('opacityValue'),
 
-  // overlay
+  // overlay — Claude session
   overlay: document.getElementById('overlay'),
   overlayClose: document.getElementById('overlayClose'),
-  setLive: document.getElementById('setLive'),
-  btnLogin: document.getElementById('btnLogin'),
-  loginStatus: document.getElementById('loginStatus'),
+  setRemember: document.getElementById('setRemember'),
+  setSessionKey: document.getElementById('setSessionKey'),
+  btnImportSession: document.getElementById('btnImportSession'),
+  importStatus: document.getElementById('importStatus'),
   btnOpenClaude: document.getElementById('btnOpenClaude'),
   btnLogout: document.getElementById('btnLogout'),
-  setManual: document.getElementById('setManual'),
-  setSession: document.getElementById('setSession'),
-  setWeekly: document.getElementById('setWeekly'),
-  setPlan: document.getElementById('setPlan'),
   btnSaveSettings: document.getElementById('btnSaveSettings'),
+
+  // overlay — Gemini session
+  setGeminiRemember: document.getElementById('setGeminiRemember'),
+  setGeminiSessionKey: document.getElementById('setGeminiSessionKey'),
+  btnGeminiImportSession: document.getElementById('btnGeminiImportSession'),
+  geminiImportStatus: document.getElementById('geminiImportStatus'),
+  btnOpenGemini: document.getElementById('btnOpenGemini'),
+  btnGeminiLogout: document.getElementById('btnGeminiLogout'),
+
+  // overlay — ChatGPT session
+  setOpenaiRemember: document.getElementById('setOpenaiRemember'),
+  setOpenaiSessionKey: document.getElementById('setOpenaiSessionKey'),
+  btnOpenaiImportSession: document.getElementById('btnOpenaiImportSession'),
+  openaiImportStatus: document.getElementById('openaiImportStatus'),
+  btnOpenChatgpt: document.getElementById('btnOpenChatgpt'),
+  btnOpenaiLogout: document.getElementById('btnOpenaiLogout'),
 };
 
 const CLAUDE_USAGE_URL = 'https://claude.ai/settings/usage';
+const GEMINI_USAGE_URL = 'https://gemini.google.com/usage';
+const OPENAI_USAGE_URL = 'https://chatgpt.com';
 
 // ---------- Helpers ----------
 function pad2(n) {
@@ -102,7 +129,7 @@ function metricRow(m) {
     `<div class="metric">` +
     `<div class="metric-top">` +
     `<span class="metric-label"><span class="dot ${m.color}"></span>${m.label}</span>` +
-    `<span class="metric-value">${m.leftText}</span>` +
+    `<span class="metric-value">${m.usedText}</span>` +
     `</div>` +
     `<div class="bar"><div class="bar-fill ${m.color}" data-w="${Math.round(m.percent * 100)}"></div></div>` +
     `<div class="metric-reset">${m.resets || ''}</div>` +
@@ -124,14 +151,19 @@ function costFooter(d) {
   );
 }
 
-// Claude "not configured" call-to-action.
+// "Not configured" call-to-action (Claude / Gemini / ChatGPT live services).
+const SITE_LABEL = {
+  gemini: 'gemini.google.com',
+  openai: 'chatgpt.com',
+  claude: 'claude.ai → Usage',
+};
 function setupBlock(d) {
+  const site = SITE_LABEL[d.service] || 'claude.ai → Usage';
   return (
     `<div class="setup">` +
     `<div class="setup-msg">${d.note}</div>` +
-    `<button class="cta" data-act="login">Log in to Claude</button>` +
-    `<button class="cta ghost" data-act="manual">Enter usage manually</button>` +
-    `<a class="cta-link" data-act="openclaude">Open claude.ai → Usage ↗</a>` +
+    `<button class="cta" data-act="setup">Add session key</button>` +
+    `<a class="cta-link" data-act="opensite">Open ${site} ↗</a>` +
     `</div>`
   );
 }
@@ -152,17 +184,18 @@ function renderService(d) {
     return `<div class="panel">${head}${setupBlock(d)}<div class="model-line">model · ${d.model}</div></div>`;
   }
 
-  // API-key warning (OpenAI / Copilot).
-  const warn =
-    d.state === 'nokey'
-      ? `<div class="warn">⚠ API key not set<a id="warnLink">settings.json</a></div>`
-      : '';
+  // Connected but no usage bars (e.g. ChatGPT) → show an info note in place
+  // of the metric rows.
+  const body = d.metrics.length
+    ? d.metrics.map(metricRow).join('')
+    : d.infoMsg
+    ? `<div class="setup-msg">${d.infoMsg}</div>`
+    : '';
 
   return (
     `<div class="panel">` +
-    warn +
     head +
-    d.metrics.map(metricRow).join('') +
+    body +
     `<div class="spark-wrap"><div class="spark-cap">Usage trend</div>${sparkline(d.sparkline, sparkColor)}</div>` +
     costFooter(d) +
     `<div class="model-line">model · ${d.model}</div>` +
@@ -171,7 +204,7 @@ function renderService(d) {
 }
 
 function renderAll(all) {
-  const svcs = ['claude', 'openai', 'copilot'].map((k) => all[k]).filter(Boolean);
+  const svcs = ['claude', 'openai', 'gemini'].map((k) => all[k]).filter(Boolean);
   if (!svcs.length) return `<div class="state-msg">No data yet…</div>`;
 
   const rows = svcs
@@ -218,24 +251,20 @@ function animateBars() {
   });
 }
 
-// Wire up the per-panel action buttons (Claude setup CTA + warn link).
+const SITE_URL = { gemini: GEMINI_USAGE_URL, openai: OPENAI_USAGE_URL, claude: CLAUDE_USAGE_URL };
+
+// Wire up the per-panel action buttons (setup CTA + open-site link).
 function bindPanelActions() {
   el.panel.querySelectorAll('[data-act]').forEach((node) => {
     const act = node.getAttribute('data-act');
     node.addEventListener('click', async () => {
-      if (act === 'login') {
-        node.textContent = 'Opening login…';
-        await api.claudeLogin();
-        await refresh();
-      } else if (act === 'manual') {
+      if (act === 'setup') {
         openSettings();
-      } else if (act === 'openclaude') {
-        api.openExternal(CLAUDE_USAGE_URL);
+      } else if (act === 'opensite') {
+        api.openExternal(SITE_URL[state.activeTab] || CLAUDE_USAGE_URL);
       }
     });
   });
-  const link = document.getElementById('warnLink');
-  if (link) link.addEventListener('click', () => api.openSettingsFile());
 }
 
 // ---------- Rendering ----------
@@ -284,11 +313,64 @@ async function refresh() {
 }
 
 // ---------- Tabs ----------
+// Build a tab button for each enabled service. Non-Claude tabs carry a small
+// "×" so the user can remove them again.
+function renderTabs() {
+  el.tabList.innerHTML = state.enabledServices
+    .map((id) => {
+      const svc = SERVICES[id];
+      if (!svc) return '';
+      const active = id === state.activeTab ? ' active' : '';
+      const remove = id === 'claude' ? '' : `<span class="tab-remove" data-remove="${id}" title="Remove">×</span>`;
+      return `<button class="tab${active}" data-tab="${id}">${svc.label}${remove}</button>`;
+    })
+    .join('');
+
+  // Hide "+" once every available service has been added.
+  const remaining = ADDABLE.filter((id) => !state.enabledServices.includes(id));
+  el.addTabBtn.style.display = remaining.length ? '' : 'none';
+}
+
+function renderAddMenu() {
+  const remaining = ADDABLE.filter((id) => !state.enabledServices.includes(id));
+  el.addMenu.innerHTML = remaining.length
+    ? remaining.map((id) => `<button class="add-item" data-add="${id}">+ ${SERVICES[id].label}</button>`).join('')
+    : `<div class="add-empty">All added</div>`;
+}
+
+function toggleAddMenu(show) {
+  const open = show == null ? el.addMenu.hidden : show;
+  if (open) renderAddMenu();
+  el.addMenu.hidden = !open;
+}
+
+function persistServices() {
+  if (state.settings) {
+    api.saveSettings({ enabledServices: state.enabledServices, activeTab: state.activeTab });
+  }
+}
+
+function addService(id) {
+  if (!SERVICES[id] || state.enabledServices.includes(id)) return;
+  state.enabledServices.push(id);
+  toggleAddMenu(false);
+  setActiveTab(id, false);
+  renderTabs();
+  persistServices();
+}
+
+function removeService(id) {
+  if (id === 'claude') return;
+  state.enabledServices = state.enabledServices.filter((s) => s !== id);
+  if (state.activeTab === id) state.activeTab = 'claude';
+  renderTabs();
+  renderActive();
+  persistServices();
+}
+
 function setActiveTab(tab, save = true) {
   state.activeTab = tab;
-  el.tabs.querySelectorAll('.tab').forEach((b) => {
-    b.classList.toggle('active', b.dataset.tab === tab);
-  });
+  renderTabs();
   renderActive();
   if (save && state.settings) {
     api.saveSettings({ activeTab: tab });
@@ -313,49 +395,79 @@ function applyOpacity(value, persist) {
 
 // ---------- Settings overlay ----------
 function claudeCfg() {
-  return (state.settings && state.settings.claude) || { manual: {} };
+  return (state.settings && state.settings.claude) || {};
 }
 
-async function updateLoginStatus() {
-  el.loginStatus.textContent = 'checking…';
-  el.loginStatus.className = 'login-status';
+function geminiCfg() {
+  return (state.settings && state.settings.gemini) || {};
+}
+
+function openaiCfg() {
+  return (state.settings && state.settings.openai) || {};
+}
+
+// Show current connection state in a service's import-status line.
+async function showStatus(statusEl, statusFn) {
+  statusEl.textContent = 'checking…';
+  statusEl.className = 'login-status';
   try {
-    const { authed } = await api.claudeStatus();
-    el.loginStatus.textContent = authed ? 'Connected ✓' : 'Not connected';
-    el.loginStatus.className = `login-status ${authed ? 'ok' : 'no'}`;
+    const { authed } = await statusFn();
+    statusEl.textContent = authed ? 'Connected ✓' : 'Not connected';
+    statusEl.className = `login-status ${authed ? 'ok' : 'no'}`;
   } catch {
-    el.loginStatus.textContent = 'Not connected';
-    el.loginStatus.className = 'login-status no';
+    statusEl.textContent = 'Not connected';
+    statusEl.className = 'login-status no';
   }
 }
 
 function openSettings() {
-  const c = claudeCfg();
-  const m = c.manual || {};
-  el.setLive.checked = c.useLiveScrape !== false;
-  el.setManual.checked = !!m.enabled;
-  el.setSession.value = m.sessionUsed == null ? '' : m.sessionUsed;
-  el.setWeekly.value = m.weeklyUsed == null ? '' : m.weeklyUsed;
-  el.setPlan.value = m.plan || 'Max';
+  el.setRemember.checked = claudeCfg().rememberMe !== false;
+  el.setSessionKey.value = '';
+  el.setGeminiRemember.checked = geminiCfg().rememberMe !== false;
+  el.setGeminiSessionKey.value = '';
+  el.setOpenaiRemember.checked = openaiCfg().rememberMe !== false;
+  el.setOpenaiSessionKey.value = '';
+
   el.overlay.hidden = false;
-  updateLoginStatus();
+  showStatus(el.importStatus, api.claudeStatus);
+  showStatus(el.geminiImportStatus, api.geminiStatus);
+  showStatus(el.openaiImportStatus, api.openaiStatus);
 }
 
 function closeSettings() {
   el.overlay.hidden = true;
 }
 
+// Import a pasted session key for one service. Shared by Claude + Gemini.
+async function importSession({ btn, input, status, remember, apiImport }) {
+  const key = input.value.trim();
+  if (!key) {
+    status.textContent = 'Paste a key first';
+    status.className = 'login-status no';
+    return;
+  }
+  btn.textContent = 'Checking…';
+  btn.disabled = true;
+  try {
+    const { authed } = await apiImport(key, remember.checked);
+    status.textContent = authed ? 'Connected ✓' : 'Invalid or expired key';
+    status.className = `login-status ${authed ? 'ok' : 'no'}`;
+    if (authed) {
+      input.value = '';
+      await refresh();
+    }
+  } finally {
+    btn.textContent = 'Use this session';
+    btn.disabled = false;
+  }
+}
+
 async function saveSettingsForm() {
-  const claude = {
-    useLiveScrape: el.setLive.checked,
-    manual: {
-      enabled: el.setManual.checked,
-      sessionUsed: numOrNull(el.setSession.value),
-      weeklyUsed: numOrNull(el.setWeekly.value),
-      plan: (el.setPlan.value || 'Max').trim() || 'Max',
-    },
-  };
-  const merged = await api.saveSettings({ claude });
+  const merged = await api.saveSettings({
+    claude: { rememberMe: el.setRemember.checked },
+    gemini: { rememberMe: el.setGeminiRemember.checked },
+    openai: { rememberMe: el.setOpenaiRemember.checked },
+  });
   if (merged) state.settings = merged;
   closeSettings();
   await refresh();
@@ -384,9 +496,32 @@ function bindDrag() {
 function bindEvents() {
   bindDrag();
 
-  el.tabs.addEventListener('click', (e) => {
+  el.tabList.addEventListener('click', (e) => {
+    const rm = e.target.closest('.tab-remove');
+    if (rm) {
+      e.stopPropagation();
+      removeService(rm.dataset.remove);
+      return;
+    }
     const btn = e.target.closest('.tab');
     if (btn) setActiveTab(btn.dataset.tab);
+  });
+
+  el.addTabBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleAddMenu();
+  });
+
+  el.addMenu.addEventListener('click', (e) => {
+    const item = e.target.closest('.add-item');
+    if (item) addService(item.dataset.add);
+  });
+
+  // Close the add menu when clicking anywhere else.
+  document.addEventListener('click', (e) => {
+    if (!el.addMenu.hidden && !el.addMenu.contains(e.target) && e.target !== el.addTabBtn) {
+      toggleAddMenu(false);
+    }
   });
 
   el.refreshBtn.addEventListener('click', refresh);
@@ -399,17 +534,56 @@ function bindEvents() {
   // Overlay
   el.overlayClose.addEventListener('click', closeSettings);
   el.btnSaveSettings.addEventListener('click', saveSettingsForm);
+
+  // Claude session
   el.btnOpenClaude.addEventListener('click', () => api.openExternal(CLAUDE_USAGE_URL));
-  el.btnLogin.addEventListener('click', async () => {
-    el.btnLogin.textContent = 'Opening…';
-    await api.claudeLogin();
-    el.btnLogin.textContent = 'Log in to Claude';
-    el.setLive.checked = true;
-    await updateLoginStatus();
-  });
+  el.btnImportSession.addEventListener('click', () =>
+    importSession({
+      btn: el.btnImportSession,
+      input: el.setSessionKey,
+      status: el.importStatus,
+      remember: el.setRemember,
+      apiImport: api.claudeImportSession,
+    })
+  );
   el.btnLogout.addEventListener('click', async () => {
     await api.claudeLogout();
-    await updateLoginStatus();
+    await showStatus(el.importStatus, api.claudeStatus);
+    await refresh();
+  });
+
+  // Gemini session
+  el.btnOpenGemini.addEventListener('click', () => api.openExternal(GEMINI_USAGE_URL));
+  el.btnGeminiImportSession.addEventListener('click', () =>
+    importSession({
+      btn: el.btnGeminiImportSession,
+      input: el.setGeminiSessionKey,
+      status: el.geminiImportStatus,
+      remember: el.setGeminiRemember,
+      apiImport: api.geminiImportSession,
+    })
+  );
+  el.btnGeminiLogout.addEventListener('click', async () => {
+    await api.geminiLogout();
+    await showStatus(el.geminiImportStatus, api.geminiStatus);
+    await refresh();
+  });
+
+  // ChatGPT session
+  el.btnOpenChatgpt.addEventListener('click', () => api.openExternal(OPENAI_USAGE_URL));
+  el.btnOpenaiImportSession.addEventListener('click', () =>
+    importSession({
+      btn: el.btnOpenaiImportSession,
+      input: el.setOpenaiSessionKey,
+      status: el.openaiImportStatus,
+      remember: el.setOpenaiRemember,
+      apiImport: api.openaiImportSession,
+    })
+  );
+  el.btnOpenaiLogout.addEventListener('click', async () => {
+    await api.openaiLogout();
+    await showStatus(el.openaiImportStatus, api.openaiStatus);
+    await refresh();
   });
 
   api.onTrayRefresh(() => refresh());
@@ -426,7 +600,14 @@ async function init() {
   tickClock();
   setInterval(tickClock, 15000);
 
-  setActiveTab(state.settings.activeTab || 'claude', false);
+  // Enabled services: always keep Claude first, keep only known services.
+  const saved = Array.isArray(state.settings.enabledServices) ? state.settings.enabledServices : [];
+  const enabled = ['claude', ...saved.filter((id) => id !== 'claude' && SERVICES[id])];
+  state.enabledServices = [...new Set(enabled)];
+
+  // Fall back to Claude if the saved tab is no longer one of the visible tabs.
+  const wanted = state.settings.activeTab || 'claude';
+  setActiveTab(state.enabledServices.includes(wanted) ? wanted : 'claude', false);
 
   await refresh();
   const interval = Math.max(30000, Number(state.settings.refreshInterval) || 300000);

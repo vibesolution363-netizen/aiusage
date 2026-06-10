@@ -313,7 +313,7 @@ async function refresh() {
   state.loading = true;
   el.refreshBtn.classList.add('spinning');
   try {
-    const all = await api.fetchUsage('all');
+    const all = await api.fetchUsage(state.enabledServices);
     if (all && !all.error) {
       state.data = all;
       el.updated.textContent = `Updated ${fmtTime(new Date())}`;
@@ -374,6 +374,8 @@ function addService(id) {
   setActiveTab(id, false);
   renderTabs();
   persistServices();
+  // Refreshes only cover enabled services, so the new tab has no data yet.
+  refresh();
 }
 
 function removeService(id) {

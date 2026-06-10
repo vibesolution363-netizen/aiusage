@@ -406,25 +406,25 @@ async function openaiData(rate) {
 
 async function getUsage(service) {
   const rate = (settings.currency && settings.currency.rate) || 4.71;
+  const fetchers = { claude: claudeData, openai: openaiData, gemini: geminiData };
   try {
-    switch (service) {
-      case 'claude':
-        return await claudeData(rate);
-      case 'openai':
-        return await openaiData(rate);
-      case 'gemini':
-        return await geminiData(rate);
-      case 'all': {
-        const [claude, openai, gemini] = await Promise.all([
-          claudeData(rate),
-          openaiData(rate),
-          geminiData(rate),
-        ]);
-        return { claude, openai, gemini };
-      }
-      default:
-        return { error: 'unknown service: ' + service };
+    // The renderer passes its enabled tabs as an array so hidden workers are
+    // only spun up for services the user actually shows. 'all' fetches everything.
+    const ids = Array.isArray(service)
+      ? [...new Set(service)].filter((id) => fetchers[id])
+      : service === 'all'
+      ? Object.keys(fetchers)
+      : null;
+    if (ids) {
+      const results = await Promise.all(ids.map((id) => fetchers[id](rate)));
+      const out = {};
+      ids.forEach((id, i) => {
+        out[id] = results[i];
+      });
+      return out;
     }
+    if (fetchers[service]) return await fetchers[service](rate);
+    return { error: 'unknown service: ' + service };
   } catch (err) {
     return { error: String((err && err.message) || err) };
   }

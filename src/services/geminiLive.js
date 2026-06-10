@@ -26,7 +26,9 @@ const { BrowserWindow, session } = require('electron');
 const PARTITION_PERSIST = 'persist:gemini';
 const PARTITION_SESSION = 'gemini';
 const BASE = 'https://gemini.google.com';
-const DEFAULT_USAGE_URL = 'https://gemini.google.com/usage';
+// hl=en pins the page to English so the "N% used" scrape keeps matching even
+// when the Google account's display language is something else.
+const DEFAULT_USAGE_URL = 'https://gemini.google.com/usage?hl=en';
 
 let remember = true;
 
@@ -178,6 +180,8 @@ function ensureWorker(usageUrl) {
       partition: partitionName(),
       contextIsolation: true,
       nodeIntegration: false,
+      // The scrape only reads innerText; skip image loading like the other workers.
+      images: false,
     },
   });
   worker.on('closed', () => {

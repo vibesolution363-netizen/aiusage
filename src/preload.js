@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (partial) => ipcRenderer.invoke('save-settings', partial),
+  getLaunchAtStartup: () => ipcRenderer.invoke('get-launch-at-startup'),
+  setLaunchAtStartup: (enabled) => ipcRenderer.invoke('set-launch-at-startup', enabled),
 
   // Window
   setOpacity: (value) => ipcRenderer.invoke('set-opacity', value),

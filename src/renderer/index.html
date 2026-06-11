@@ -61,6 +61,19 @@
               <button class="icon-btn no-drag" id="overlayClose" title="Close">×</button>
             </div>
             <div class="sheet-body">
+              <!-- General -->
+              <section class="set-card">
+                <header class="set-card-head">
+                  <span class="set-logo">⚡</span>
+                  <span class="set-card-title">General</span>
+                </header>
+                <label class="set-toggle">
+                  <input type="checkbox" id="setLaunchAtStartup" />
+                  <span>Launch automatically when Windows starts</span>
+                </label>
+                <p class="set-hint">Starts the dock minimized to the tray on sign-in. Takes effect in the built app.</p>
+              </section>
+
               <!-- Claude -->
               <section class="set-card">
                 <header class="set-card-head">
@@ -160,6 +173,9 @@
 
         <!-- Grab tab shown only when the dock is slid off the right edge -->
         <button class="peek-handle no-drag" id="peekHandle" title="Slide dock back in">‹</button>
+
+        <!-- Transient confirmation toast (e.g. after saving settings) -->
+        <div class="toast" id="toast" role="status" aria-live="polite"></div>
       </div>
     </div>
 

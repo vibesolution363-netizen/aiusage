@@ -1042,6 +1042,34 @@ input[type='range']::-webkit-slider-thumb {
   color: var(--text-faint);
 }
 
+/* ---- Toast (transient confirmation) ---- */
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 56px;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 70;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(16, 163, 127, 0.16);
+  border: 1px solid rgba(45, 212, 191, 0.4);
+  color: var(--teal);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* ---- Advanced (manual cookie) disclosure ---- */
 .set-adv {
   border-top: 1px solid var(--border);

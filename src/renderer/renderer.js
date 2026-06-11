@@ -31,6 +31,7 @@ const state = {
 // ---------- DOM refs ----------
 const el = {
   dock: document.getElementById('dock'),
+  toast: document.getElementById('toast'),
   titlebar: document.getElementById('titlebar'),
   clock: document.getElementById('clock'),
   settingsBtn: document.getElementById('settingsBtn'),
@@ -49,9 +50,12 @@ const el = {
   opacity: document.getElementById('opacity'),
   opacityValue: document.getElementById('opacityValue'),
 
-  // overlay — Claude session
+  // overlay — general
   overlay: document.getElementById('overlay'),
   overlayClose: document.getElementById('overlayClose'),
+  setLaunchAtStartup: document.getElementById('setLaunchAtStartup'),
+
+  // overlay — Claude session
   btnClaudeLogin: document.getElementById('btnClaudeLogin'),
   claudeLoginStatus: document.getElementById('claudeLoginStatus'),
   setRemember: document.getElementById('setRemember'),
@@ -477,10 +481,24 @@ function openSettings() {
   el.geminiLoginStatus.textContent = '';
   el.openaiLoginStatus.textContent = '';
 
+  // Reflect the real OS state (user may have toggled it elsewhere).
+  api.getLaunchAtStartup().then((on) => {
+    el.setLaunchAtStartup.checked = !!on;
+  });
+
   el.overlay.hidden = false;
   showStatus(el.importStatus, api.claudeStatus);
   showStatus(el.geminiImportStatus, api.geminiStatus);
   showStatus(el.openaiImportStatus, api.openaiStatus);
+}
+
+// Brief confirmation pill at the bottom of the dock; auto-dismisses.
+let toastTimer = null;
+function showToast(msg) {
+  el.toast.textContent = msg;
+  el.toast.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.toast.classList.remove('show'), 1800);
 }
 
 function closeSettings() {
@@ -538,6 +556,7 @@ async function saveSettingsForm() {
   });
   if (merged) state.settings = merged;
   closeSettings();
+  showToast('Settings saved ✓');
   await refresh();
 }
 
@@ -604,6 +623,12 @@ function bindEvents() {
   // Overlay
   el.overlayClose.addEventListener('click', closeSettings);
   el.btnSaveSettings.addEventListener('click', saveSettingsForm);
+
+  // Launch at startup — apply immediately, then reflect the actual OS state.
+  el.setLaunchAtStartup.addEventListener('change', async () => {
+    const on = await api.setLaunchAtStartup(el.setLaunchAtStartup.checked);
+    el.setLaunchAtStartup.checked = !!on;
+  });
 
   // Claude session
   el.btnClaudeLogin.addEventListener('click', () =>
@@ -712,6 +737,7 @@ async function init() {
   await refresh();
   const interval = Math.max(30000, Number(state.settings.refreshInterval) || 300000);
   setInterval(refresh, interval);
+
 }
 
 window.addEventListener('DOMContentLoaded', init);

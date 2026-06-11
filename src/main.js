@@ -28,6 +28,8 @@ const DEFAULT_SETTINGS = {
   // AI services shown as tabs. Claude is always present; the user adds the
   // rest (openai, gemini) via the "+" button in the dock.
   enabledServices: ['claude'],
+  // Optional: launch the dock automatically when Windows starts. Off by default.
+  launchAtStartup: false,
   claude: {
     useLiveScrape: true,
     // Remember the claude.ai login across restarts (persistent cookie jar).
@@ -88,7 +90,39 @@ function getSettingsFile() {
 function getAssetPath(...p) {
   const base = app.isPackaged ? path.join(process.resourcesPath, 'app.asar.unpacked') : path.join(__dirname, '..');
   return path.join(base, 'assets', ...p);
-}~
+}
+
+// ---------- Launch at startup ----------
+// Portable builds run from a temp extraction dir, so process.execPath is not a
+// stable target for the Run registry entry. PORTABLE_EXECUTABLE_FILE points at
+// the real .exe the user double-clicked — use that so auto-launch survives.
+function loginItemOptions() {
+  const opts = {};
+  if (process.env.PORTABLE_EXECUTABLE_FILE) opts.path = process.env.PORTABLE_EXECUTABLE_FILE;
+  return opts;
+}
+
+// Sync the OS "run at login" entry with the saved preference. No-op in dev
+// (we don't want to register electron.exe); only meaningful in a packaged app.
+function applyLaunchAtStartup(enabled) {
+  if (!app.isPackaged) return;
+  try {
+    app.setLoginItemSettings(Object.assign(loginItemOptions(), { openAtLogin: !!enabled }));
+  } catch (err) {
+    console.error('Failed to set login item:', err.message);
+  }
+}
+
+// Read the real OS state when packaged so the toggle reflects reality (the user
+// may have removed it via Task Manager). In dev, fall back to the saved pref.
+function isLaunchAtStartupOn() {
+  if (!app.isPackaged) return !!settings.launchAtStartup;
+  try {
+    return app.getLoginItemSettings(loginItemOptions()).openAtLogin;
+  } catch {
+    return !!settings.launchAtStartup;
+  }
+}
 
 // ---------- Settings helpers ----------
 function deepMerge(base, override) {
@@ -450,6 +484,16 @@ ipcMain.handle('set-opacity', (_e, value) => {
 
 ipcMain.handle('fetch-usage', (_e, service) => getUsage(service));
 
+// ---- Launch at startup ----
+ipcMain.handle('get-launch-at-startup', () => isLaunchAtStartupOn());
+
+ipcMain.handle('set-launch-at-startup', (_e, enabled) => {
+  settings.launchAtStartup = enabled !== false;
+  applyLaunchAtStartup(settings.launchAtStartup);
+  scheduleSave();
+  return isLaunchAtStartupOn();
+});
+
 // ---- Claude live session ----
 // Open a sign-in window and capture cookies automatically.
 ipcMain.handle('claude-login', async (_e, remember) => {
@@ -628,6 +672,9 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     loadSettings();
+    // Re-assert the saved preference each launch so a moved portable .exe keeps
+    // a correct Run entry (PORTABLE_EXECUTABLE_FILE may differ between runs).
+    applyLaunchAtStartup(settings.launchAtStartup);
     createWindow();
     createTray();
   });

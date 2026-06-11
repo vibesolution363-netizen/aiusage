@@ -84,6 +84,11 @@ Open it any time from the **tray → Edit settings.json**, or the
 - **⚙** settings (Claude login + manual usage) · **↻** refresh now ·
   **▾ / ▸** collapse/expand · **×** hide to tray.
 - **Transparency** slider (bottom) sets window opacity 20–100%.
+- **Slide to edge**: the dock slides off the right edge (leaving a small grab
+  tab) when it loses focus, or via the slide button. Click the tab to bring it
+  back.
+- **F1** (global) — slide the dock back out from the right edge (and slide it
+  away again). Works even when another app is focused.
 - **Tray icon**: double-click to show/hide; right-click for Refresh / Settings / Quit.
 
 ---

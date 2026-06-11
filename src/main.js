@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, shell, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -305,6 +305,33 @@ function applyPeek(wantPeek, animate = true) {
   else win.setPosition(targetX, win.getPosition()[1]);
   settings.window.peeked = peeked;
   scheduleSave();
+}
+
+// Flip the slide state and keep the renderer's chrome in sync. Sliding the dock
+// back out (un-peek) also shows + focuses it, so it pops in front of whatever
+// app currently has focus. Used by the F1 global shortcut.
+function togglePeek() {
+  if (!win) return;
+  const wantPeek = !peeked;
+  if (!wantPeek) {
+    if (!win.isVisible()) win.show();
+    win.focus();
+  }
+  applyPeek(wantPeek, true);
+  win.webContents.send('peek-changed', wantPeek);
+}
+
+// ---------- Global shortcut ----------
+// F1 slides the dock out from (or back to) the right edge from anywhere, even
+// while another app is focused — which is the whole point, since the dock holds
+// no OS focus once it has slid away.
+function registerShortcuts() {
+  try {
+    const ok = globalShortcut.register('F1', togglePeek);
+    if (!ok) console.error('Failed to register F1 shortcut (already in use).');
+  } catch (err) {
+    console.error('Failed to register F1 shortcut:', err.message);
+  }
 }
 
 // ---------- System tray ----------
@@ -677,6 +704,7 @@ if (!gotLock) {
     applyLaunchAtStartup(settings.launchAtStartup);
     createWindow();
     createTray();
+    registerShortcuts();
   });
 
   // Keep running in the tray when the window is hidden/closed.
@@ -699,5 +727,9 @@ if (!gotLock) {
     geminiLive.destroy();
     openaiLive.destroy();
     writeSettings();
+  });
+
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
   });
 }

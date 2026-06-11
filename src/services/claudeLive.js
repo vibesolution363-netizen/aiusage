@@ -178,24 +178,39 @@ function buildScript(endpoints) {
     '(async () => {' +
     'const out={authed:true,tried:[],data:null,endpoint:null,raw:null,plan:null};' +
     'function pick(o,ks){for(const k of ks){if(o&&o[k]!=null)return o[k];}return null;}' +
+    // usedFrom returns the RAW usage figure plus whether it came from a
+    // percent-named field (pct:true → scale still undecided: could be a 0-1
+    // fraction or a 0-100 percent) or a used/limit ratio (pct:false → already a
+    // 0-1 fraction). The scale of pct values is resolved later, per response.
     'function usedFrom(o){if(!o||typeof o!=="object")return null;' +
     'let u=pick(o,["utilization","used_percent","usedPercent","percent_used","percentUsed","percent","pct_used"]);' +
-    'if(u!=null){let v=Number(u);if(v>1)v=v/100;return Math.max(0,Math.min(1,v));}' +
+    'if(u!=null){return{raw:Number(u),pct:true};}' +
     'const used=pick(o,["used","used_tokens","usage","count","consumed"]);' +
     'const limit=pick(o,["limit","total","cap","max","allowed","quota"]);' +
-    'if(used!=null&&limit){return Math.max(0,Math.min(1,Number(used)/Number(limit)));}' +
+    'if(used!=null&&limit){return{raw:Number(used)/Number(limit),pct:false};}' +
     'const rem=pick(o,["remaining","left","remaining_tokens"]);' +
-    'if(rem!=null&&limit){return Math.max(0,Math.min(1,1-Number(rem)/Number(limit)));}' +
+    'if(rem!=null&&limit){return{raw:1-Number(rem)/Number(limit),pct:false};}' +
     'return null;}' +
     'function resetFrom(o){return pick(o,["resets_at","resetsAt","reset_at","expires_at","expiresAt","reset","next_reset"]);}' +
     'function parse(j){if(!j||typeof j!=="object")return null;let s=null,w=null;' +
     'for(const k of Object.keys(j)){const lk=k.toLowerCase();const uu=usedFrom(j[k]);if(uu==null)continue;' +
-    'if(s==null&&/(^|_)(5|five|hour|session|hourly|rolling)/.test(lk)){s={used:uu,resets:resetFrom(j[k])};}' +
-    'else if(w==null&&/(7|seven|day|week)/.test(lk)){w={used:uu,resets:resetFrom(j[k])};}}' +
-    'if(!s&&j.session){const uu=usedFrom(j.session);if(uu!=null)s={used:uu,resets:resetFrom(j.session)};}' +
-    'if(!w&&j.weekly){const uu=usedFrom(j.weekly);if(uu!=null)w={used:uu,resets:resetFrom(j.weekly)};}' +
-    'if(!s&&!w){const uu=usedFrom(j);if(uu!=null)s={used:uu,resets:resetFrom(j)};}' +
-    'if(!s&&!w)return null;return{session:s,weekly:w};}' +
+    'if(s==null&&/(^|_)(5|five|hour|session|hourly|rolling)/.test(lk)){s={raw:uu.raw,pct:uu.pct,resets:resetFrom(j[k])};}' +
+    'else if(w==null&&/(7|seven|day|week)/.test(lk)){w={raw:uu.raw,pct:uu.pct,resets:resetFrom(j[k])};}}' +
+    'if(!s&&j.session){const uu=usedFrom(j.session);if(uu!=null)s={raw:uu.raw,pct:uu.pct,resets:resetFrom(j.session)};}' +
+    'if(!w&&j.weekly){const uu=usedFrom(j.weekly);if(uu!=null)w={raw:uu.raw,pct:uu.pct,resets:resetFrom(j.weekly)};}' +
+    'if(!s&&!w){const uu=usedFrom(j);if(uu!=null)s={raw:uu.raw,pct:uu.pct,resets:resetFrom(j)};}' +
+    'if(!s&&!w)return null;' +
+    // Decide the percent scale ONCE for the whole payload. claude.ai returns
+    // "utilization" as an integer percent (0-100), but a lone value can't be
+    // told apart from a 0-1 fraction — e.g. 1 is both "1%" and "100%". So look
+    // across all percent figures: if any exceeds 1 the payload is 0-100 and we
+    // divide every percent value by 100; otherwise treat them as fractions.
+    // (Without this, a meter sitting at exactly 1% was read as 100%.)
+    'var pr=[];if(s&&s.pct)pr.push(s.raw);if(w&&w.pct)pr.push(w.raw);' +
+    'var scale=pr.some(function(x){return x>1;})?100:1;' +
+    'function fin(m){if(!m)return null;var v=m.pct?m.raw/scale:m.raw;if(!isFinite(v))v=0;' +
+    'return{used:Math.max(0,Math.min(1,v)),resets:m.resets};}' +
+    'return{session:fin(s),weekly:fin(w)};}' +
     'async function gj(u){try{const r=await fetch(u,{credentials:"include",headers:{accept:"application/json"}});' +
     'const t=await r.text();let j=null;try{j=JSON.parse(t);}catch(e){}out.tried.push({u:u,status:r.status});' +
     'return{ok:r.ok,status:r.status,j:j};}catch(e){out.tried.push({u:u,err:String(e)});return{ok:false};}}' +

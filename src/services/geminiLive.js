@@ -157,7 +157,12 @@ async function importSession(rawKey) {
       }
     }
     destroy(); // rebuild the worker so the new cookies are in effect
-    return await isAuthed();
+    // Stored cookies only prove the jar accepted them, not that Google honours
+    // them. Run the real in-page scrape: if the cookies don't authenticate the
+    // page redirects to accounts.google.com and authed comes back false, so a
+    // junk paste is rejected instead of showing "Connected".
+    const live = await fetchUsage();
+    return !!(live && live.authed);
   } catch {
     return false;
   }

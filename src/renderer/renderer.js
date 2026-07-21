@@ -114,6 +114,24 @@ function numOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+// Escape text before interpolating into innerHTML. Panel data can carry
+// externally-sourced strings — plan/reset text scraped from provider DOM
+// (geminiLive) or typed into settings.json — so treat all of it as untrusted.
+function esc(s) {
+  return String(s == null ? '' : s).replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+  );
+}
+
+// Sanitise a value used inside a class attribute (badge/colour tokens) down to
+// a bare identifier so it can never break out of the attribute.
+function token(s) {
+  return String(s == null ? '' : s)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '');
+}
+
 // ---------- Templates ----------
 function sparkline(values, color) {
   const w = 224;
@@ -141,11 +159,11 @@ function metricRow(m) {
   return (
     `<div class="metric">` +
     `<div class="metric-top">` +
-    `<span class="metric-label"><span class="dot ${m.color}"></span>${m.label}</span>` +
-    `<span class="metric-value">${m.usedText}</span>` +
+    `<span class="metric-label"><span class="dot ${token(m.color)}"></span>${esc(m.label)}</span>` +
+    `<span class="metric-value">${esc(m.usedText)}</span>` +
     `</div>` +
-    `<div class="bar"><div class="bar-fill ${m.color}" data-w="${Math.round(m.percent * 100)}"></div></div>` +
-    `<div class="metric-reset">${m.resets || ''}</div>` +
+    `<div class="bar"><div class="bar-fill ${token(m.color)}" data-w="${Math.round(m.percent * 100)}"></div></div>` +
+    `<div class="metric-reset">${esc(m.resets || '')}</div>` +
     `</div>`
   );
 }
@@ -156,7 +174,7 @@ function costFooter(d) {
   if (c.myr == null) {
     return (
       `<div class="cost">` +
-      `<div class="cost-left"><span>${d.plan} plan</span><span>price not set</span></div>` +
+      `<div class="cost-left"><span>${esc(d.plan)} plan</span><span>price not set</span></div>` +
       `<div class="cost-right">—</div>` +
       `</div>`
     );
@@ -167,7 +185,7 @@ function costFooter(d) {
   const sub = c.currency === 'usd' ? `$${money(c.usd)} / month` : 'per month';
   return (
     `<div class="cost">` +
-    `<div class="cost-left"><span>${d.plan} plan</span><span>${sub}</span></div>` +
+    `<div class="cost-left"><span>${esc(d.plan)} plan</span><span>${sub}</span></div>` +
     `<div class="cost-right">RM ${money(c.myr)}</div>` +
     `</div>`
   );
@@ -183,27 +201,28 @@ function setupBlock(d) {
   const site = SITE_LABEL[d.service] || 'claude.ai → Usage';
   return (
     `<div class="setup">` +
-    `<div class="setup-msg">${d.note}</div>` +
+    `<div class="setup-msg">${esc(d.note)}</div>` +
     `<button class="cta" data-act="setup">Add session key</button>` +
-    `<a class="cta-link" data-act="opensite">Open ${site} ↗</a>` +
+    `<a class="cta-link" data-act="opensite">Open ${esc(site)} ↗</a>` +
     `</div>`
   );
 }
 
 function renderService(d) {
-  const planClass = (d.plan || '').toLowerCase();
-  const sparkColor = SVC_COLOR[d.service] || 'amber';
+  const planClass = token(d.plan);
+  const sparkColor = token(SVC_COLOR[d.service] || 'amber');
+  const svcClass = token(d.service);
 
   const head =
     `<div class="svc-head">` +
-    `<div class="svc-logo ${d.service}">${d.initial}</div>` +
-    `<div class="svc-name">${d.name}</div>` +
-    `<span class="badge ${planClass}">${d.plan}</span>` +
+    `<div class="svc-logo ${svcClass}">${esc(d.initial)}</div>` +
+    `<div class="svc-name">${esc(d.name)}</div>` +
+    `<span class="badge ${planClass}">${esc(d.plan)}</span>` +
     `</div>`;
 
   // Claude with no usable numbers → show the setup CTA instead of bars.
   if (d.needsSetup) {
-    return `<div class="panel">${head}${setupBlock(d)}<div class="model-line">model · ${d.model}</div></div>`;
+    return `<div class="panel">${head}${setupBlock(d)}<div class="model-line">model · ${esc(d.model)}</div></div>`;
   }
 
   // Connected but no usage bars (e.g. ChatGPT) → show an info note in place
@@ -211,7 +230,7 @@ function renderService(d) {
   const body = d.metrics.length
     ? d.metrics.map(metricRow).join('')
     : d.infoMsg
-    ? `<div class="setup-msg">${d.infoMsg}</div>`
+    ? `<div class="setup-msg">${esc(d.infoMsg)}</div>`
     : '';
 
   return (
@@ -220,7 +239,7 @@ function renderService(d) {
     body +
     `<div class="spark-wrap"><div class="spark-cap">Usage trend</div>${sparkline(d.sparkline, sparkColor)}</div>` +
     costFooter(d) +
-    `<div class="model-line">model · ${d.model}</div>` +
+    `<div class="model-line">model · ${esc(d.model)}</div>` +
     `</div>`
   );
 }
@@ -236,10 +255,10 @@ function renderAll(all) {
       const right = d.needsSetup ? '—' : `${Math.round(pct * 100)}%`;
       return (
         `<div class="all-row">` +
-        `<div class="svc-logo ${d.service}">${d.initial}</div>` +
+        `<div class="svc-logo ${token(d.service)}">${esc(d.initial)}</div>` +
         `<div class="all-mid">` +
-        `<div class="all-name"><b>${d.name}</b><span>${right}</span></div>` +
-        `<div class="bar"><div class="bar-fill ${color}" data-w="${Math.round(pct * 100)}"></div></div>` +
+        `<div class="all-name"><b>${esc(d.name)}</b><span>${right}</span></div>` +
+        `<div class="bar"><div class="bar-fill ${token(color)}" data-w="${Math.round(pct * 100)}"></div></div>` +
         `</div></div>`
       );
     })
@@ -482,9 +501,11 @@ function openSettings() {
   el.openaiLoginStatus.textContent = '';
 
   // Reflect the real OS state (user may have toggled it elsewhere).
-  api.getLaunchAtStartup().then((on) => {
-    el.setLaunchAtStartup.checked = !!on;
-  });
+  api.getLaunchAtStartup()
+    .then((on) => {
+      el.setLaunchAtStartup.checked = !!on;
+    })
+    .catch(() => {});
 
   el.overlay.hidden = false;
   showStatus(el.importStatus, api.claudeStatus);
@@ -565,24 +586,10 @@ function tickClock() {
   el.clock.textContent = fmtTime(new Date());
 }
 
-// ---------- Drag ----------
-function bindDrag() {
-  el.titlebar.addEventListener('mousedown', (e) => {
-    if (e.button !== 0) return;
-    if (e.target.closest('.no-drag')) return;
-    api.startDrag({ x: e.clientX, y: e.clientY });
-    const onUp = () => {
-      api.endDrag();
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mouseup', onUp);
-  });
-}
-
 // ---------- Events ----------
+// Window dragging is native (-webkit-app-region: drag on the titlebar), so no
+// JS drag handling is needed here.
 function bindEvents() {
-  bindDrag();
-
   el.tabList.addEventListener('click', (e) => {
     const rm = e.target.closest('.tab-remove');
     if (rm) {
@@ -615,6 +622,10 @@ function bindEvents() {
   el.collapseBtn.addEventListener('click', () => setCollapsed(!state.collapsed));
   el.slideBtn.addEventListener('click', () => setPeeked(true));
   el.peekHandle.addEventListener('click', () => setPeeked(false));
+  // While peeked the window is click-through; hovering the grab tab is the
+  // only spot that re-arms the mouse so the tab itself stays clickable.
+  el.peekHandle.addEventListener('mouseenter', () => api.setInteractive(true));
+  el.peekHandle.addEventListener('mouseleave', () => api.setInteractive(false));
   el.closeBtn.addEventListener('click', () => api.hideApp());
   el.settingsBtn.addEventListener('click', openSettings);
 

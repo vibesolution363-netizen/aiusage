@@ -70,6 +70,14 @@ body {
   gap: 8px;
   padding: 11px 12px 9px;
   border-bottom: 1px solid var(--border);
+  /* Native OS drag — moving the window ourselves via setPosition/setBounds
+     resizes it on Windows displays scaled above 100%. */
+  -webkit-app-region: drag;
+}
+
+/* Anything clickable inside the drag region must opt out, or the OS eats the
+   mouse events before they reach the page. */
+.no-drag {
   -webkit-app-region: no-drag;
 }
 
@@ -917,6 +925,9 @@ input[type='range']::-webkit-slider-thumb {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border-radius: 16px;
+  /* The sheet covers the titlebar's drag region; without this its top strip
+     would drag the window instead of receiving clicks. */
+  -webkit-app-region: no-drag;
 }
 .overlay[hidden] {
   display: none;

@@ -14,8 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setOpacity: (value) => ipcRenderer.invoke('set-opacity', value),
   resizeWindow: (height) => ipcRenderer.invoke('resize-window', height),
   setPeek: (peek) => ipcRenderer.send('set-peek', peek),
-  startDrag: (offset) => ipcRenderer.send('drag-start', offset),
-  endDrag: () => ipcRenderer.send('drag-end'),
+  setInteractive: (interactive) => ipcRenderer.send('set-interactive', interactive),
   closeApp: () => ipcRenderer.send('close-app'),
   hideApp: () => ipcRenderer.send('minimize-app'),
 

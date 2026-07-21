@@ -148,7 +148,12 @@ async function importSession(rawKey) {
       expirationDate,
     });
     destroy(); // rebuild the worker so the new cookie is in effect
-    return await isAuthed();
+    // A stored cookie only proves the jar accepted it, not that claude.ai does.
+    // Run the real in-page fetch (Cloudflare + session context apply) and trust
+    // its authed verdict, which flips to false on a 401/403 from the API — so a
+    // pasted junk key is correctly rejected instead of showing "Connected".
+    const live = await fetchUsage();
+    return !!(live && live.authed);
   } catch {
     return false;
   }

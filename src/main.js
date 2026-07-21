@@ -66,11 +66,24 @@ const DEFAULT_SETTINGS = {
 let win = null;
 let tray = null;
 let settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-let dragTimer = null;
-let dragOffset = { x: 0, y: 0 };
 let saveTimer = null;
 let slideTimer = null;
 let peeked = false;
+// Intended window height (renderer switches it via 'resize-window' on collapse).
+let winHeight = WIN_HEIGHT;
+
+// Apply bounds without letting Windows DPI rounding change the size. On
+// displays scaled above 100%, setPosition/setBounds on a non-resizable window
+// re-rounds the size constraints each call, growing the window a pixel at a
+// time. Lifting the resizable flag for the call sidesteps the constraint
+// rounding; the intended size is always passed explicitly so nothing drifts.
+function setWinBounds(x, y) {
+  if (!win) return;
+  const bounds = { x: Math.round(x), y: Math.round(y), width: WIN_WIDTH, height: winHeight };
+  win.setResizable(true);
+  win.setBounds(bounds);
+  win.setResizable(false);
+}
 
 // ---------- Paths ----------
 // Portable apps keep their settings next to the .exe so "copy folder + run"
@@ -234,11 +247,30 @@ function createWindow() {
   });
 
   // Slide out of the way automatically when the dock loses focus
-  // (the user clicked another app, a browser, or the desktop).
+  // (the user clicked another app, a browser, or the desktop). Deferred so we
+  // can tell WHERE focus went: if it landed on one of our own windows — a
+  // sign-in / capture window opened from Settings — the user is still working
+  // with us, so stay put. getFocusedWindow() is null only when focus left the
+  // app entirely.
   win.on('blur', () => {
-    if (!win || !win.isVisible() || peeked || app.isQuitting) return;
-    applyPeek(true, true);
-    win.webContents.send('peek-changed', true);
+    setTimeout(() => {
+      if (!win || win.isDestroyed() || !win.isVisible() || peeked || app.isQuitting) return;
+      if (BrowserWindow.getFocusedWindow()) return;
+      applyPeek(true, true);
+      win.webContents.send('peek-changed', true);
+    }, 120);
+  });
+
+  // Dragging is native (-webkit-app-region on the titlebar); persist the
+  // position when the window settles. Skip programmatic slides — peek
+  // positions are recomputed from the work area, so saving them would
+  // corrupt the restore point.
+  win.on('move', () => {
+    if (!win || slideTimer || peeked) return;
+    const [x, y] = win.getPosition();
+    settings.window.x = x;
+    settings.window.y = y;
+    scheduleSave();
   });
 
   // Open external links in the default browser, never inside the dock.
@@ -286,7 +318,7 @@ function animateX(targetX) {
     const t = Math.min(1, (Date.now() - startT) / dur);
     const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // easeInOutQuad
     const y = win.getPosition()[1];
-    win.setPosition(Math.round(startX + (targetX - startX) * ease), y);
+    setWinBounds(startX + (targetX - startX) * ease, y);
     if (t >= 1) {
       clearInterval(slideTimer);
       slideTimer = null;
@@ -294,15 +326,26 @@ function animateX(targetX) {
   }, 8);
 }
 
+// While peeked, the window is still a 22px always-on-top strip sitting over
+// the right screen edge — exactly where a maximized app's scrollbar lives.
+// Let clicks fall through it; forward:true keeps mousemove flowing to the
+// page so hovering the grab tab can switch interaction back on.
+function syncClickThrough(interactive = false) {
+  if (!win) return;
+  if (peeked && !interactive) win.setIgnoreMouseEvents(true, { forward: true });
+  else win.setIgnoreMouseEvents(false);
+}
+
 // Slide the dock off the right edge (only the grab tab remains) or back in.
 function applyPeek(wantPeek, animate = true) {
   if (!win) return;
   peeked = !!wantPeek;
+  syncClickThrough();
   const wa = workAreaForWin();
   const waRight = wa.x + wa.width;
   const targetX = peeked ? waRight - HANDLE_W : waRight - WIN_WIDTH;
   if (animate) animateX(targetX);
-  else win.setPosition(targetX, win.getPosition()[1]);
+  else setWinBounds(targetX, win.getPosition()[1]);
   settings.window.peeked = peeked;
   scheduleSave();
 }
@@ -638,35 +681,15 @@ ipcMain.handle('openai-status', async () => {
 ipcMain.handle('resize-window', (_e, height) => {
   if (!win) return false;
   const [x, y] = win.getPosition();
-  const h = Math.max(COLLAPSED_HEIGHT, Math.min(900, Math.round(Number(height) || WIN_HEIGHT)));
-  win.setBounds({ x, y, width: WIN_WIDTH, height: h });
+  winHeight = Math.max(COLLAPSED_HEIGHT, Math.min(900, Math.round(Number(height) || WIN_HEIGHT)));
+  setWinBounds(x, y);
   return true;
 });
 
 ipcMain.on('set-peek', (_e, wantPeek) => applyPeek(wantPeek, true));
 
-ipcMain.on('drag-start', (_e, offset) => {
-  dragOffset = offset && Number.isFinite(offset.x) ? offset : { x: 0, y: 0 };
-  if (dragTimer) clearInterval(dragTimer);
-  dragTimer = setInterval(() => {
-    if (!win) return;
-    const p = screen.getCursorScreenPoint();
-    win.setPosition(p.x - dragOffset.x, p.y - dragOffset.y);
-  }, 8);
-});
-
-ipcMain.on('drag-end', () => {
-  if (dragTimer) {
-    clearInterval(dragTimer);
-    dragTimer = null;
-  }
-  if (win) {
-    const [x, y] = win.getPosition();
-    settings.window.x = x;
-    settings.window.y = y;
-    scheduleSave();
-  }
-});
+// Renderer reports the cursor entering/leaving the grab tab while peeked.
+ipcMain.on('set-interactive', (_e, interactive) => syncClickThrough(!!interactive));
 
 ipcMain.on('close-app', () => {
   app.isQuitting = true;

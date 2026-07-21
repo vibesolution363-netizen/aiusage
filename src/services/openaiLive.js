@@ -147,7 +147,12 @@ async function importSession(rawKey) {
       }
     }
     destroy(); // rebuild the worker so the new cookies are in effect
-    return await isAuthed();
+    // Stored cookies only prove the jar accepted them, not that ChatGPT does.
+    // Run the real in-page fetch (/api/auth/session): an invalid cookie yields
+    // an empty session and authed comes back false, so a junk paste is rejected
+    // instead of showing "Connected".
+    const live = await fetchUsage();
+    return !!(live && live.authed);
   } catch {
     return false;
   }
